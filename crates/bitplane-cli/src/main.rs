@@ -13,7 +13,8 @@ use std::path::PathBuf;
 
 use bitplane_core::{
     BranchIntent, Directories, DirectoryOverrides, EngineError, ErrorEnvelope, Interrupt,
-    LocalEngine, PlaneCreateRequest, Request, Response, SystemEnvironment, Termination, dispatch,
+    LocalEngine, PlaneCreateRequest, ProjectAddRequest, ProjectFetchRequest, Request, Response,
+    SystemEnvironment, Termination, dispatch,
 };
 use clap::{Args, Parser, Subcommand};
 use render::Rendering;
@@ -64,6 +65,42 @@ struct GlobalFlags {
 enum Command {
     /// Create a plane and the worktrees of every member named.
     Create(CreateArgs),
+
+    /// Manage the projects registered on this host.
+    #[command(subcommand)]
+    Project(ProjectCommand),
+}
+
+/// The project verbs. Prefixed with `project`, where a plane verb is bare.
+#[derive(Debug, Subcommand)]
+enum ProjectCommand {
+    /// Register a project from a URL, building the source repo bp will own.
+    Add(ProjectAddArgs),
+
+    /// List every project registered on this host.
+    List,
+
+    /// Bring owned projects up to date with their forges.
+    Fetch(ProjectFetchArgs),
+}
+
+#[derive(Debug, Args)]
+struct ProjectAddArgs {
+    /// Anything git can fetch from: git@…, https://…, ssh://….
+    #[arg(value_name = "url")]
+    url: String,
+
+    /// The project's name, which is also its directory name.
+    #[arg(long, value_name = "name")]
+    name: Option<String>,
+}
+
+#[derive(Debug, Args)]
+struct ProjectFetchArgs {
+    /// Which projects to fetch, as `@name` or `name`. With none named, every
+    /// registered project is taken in turn.
+    #[arg(value_name = "project")]
+    projects: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -142,11 +179,21 @@ fn execute(cli: Cli, rendering: Rendering) -> Invocation {
     };
 
     match answer(command, &cli.global) {
-        Ok(response) => Invocation {
-            stdout: render::response(&response, rendering),
-            stderr: String::new(),
-            termination: termination_for(&response),
-        },
+        Ok(response) => {
+            // Results and a failure are not alternatives: a fan-out whose rows
+            // are the result can still report that it did not fully succeed,
+            // and the rows are what says which part did not.
+            let termination = termination_for(&response);
+
+            Invocation {
+                stdout: render::response(&response, rendering),
+                stderr: termination
+                    .envelope()
+                    .map(|envelope| render::envelope(envelope, rendering))
+                    .unwrap_or_default(),
+                termination,
+            }
+        }
         Err(error) => failed(error.envelope(), rendering),
     }
 }
@@ -179,7 +226,16 @@ fn answer(command: Command, global: &GlobalFlags) -> Result<Response, EngineErro
 fn termination_for(response: &Response) -> Termination {
     match response {
         Response::PlaneCreate(created) if created.interrupted => Termination::Interrupted,
-        _ => Termination::Ok,
+        Response::PlaneCreate(_) | Response::ProjectAdd(_) => Termination::Ok,
+        // A listing tolerates a file it cannot read: the row is the result and
+        // drift is the flag saying to look at it.
+        Response::ProjectList(listing) if listing.has_unreadable() => Termination::Drift,
+        Response::ProjectList(_) => Termination::Ok,
+        Response::ProjectFetch(fetched) if fetched.interrupted => Termination::Interrupted,
+        Response::ProjectFetch(fetched) => match fetched.failure() {
+            Some(error) => Termination::from(error),
+            None => Termination::Ok,
+        },
     }
 }
 
@@ -233,6 +289,16 @@ fn no_command() -> ErrorEnvelope {
 /// `match` is what makes a forgotten wiring a compile error.
 fn request_for(command: Command) -> Request {
     match command {
+        Command::Project(ProjectCommand::Add(args)) => Request::ProjectAdd(ProjectAddRequest {
+            url: args.url,
+            name: args.name,
+        }),
+        Command::Project(ProjectCommand::List) => Request::ProjectList,
+        Command::Project(ProjectCommand::Fetch(args)) => {
+            Request::ProjectFetch(ProjectFetchRequest {
+                projects: args.projects,
+            })
+        }
         Command::Create(args) => Request::PlaneCreate(PlaneCreateRequest {
             members: args.members,
             branch: args.branch,

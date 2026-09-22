@@ -11,8 +11,10 @@
 //! assert both. `code` is not printed: it is the exit status, and a number on
 //! screen that duplicates `$?` is noise.
 
+use bitplane_core::member::PROJECT_SIGIL;
 use bitplane_core::{
-    CreatedMember, ErrorEnvelope, Outcome, PerMember, PlaneCreated, Problem, Response,
+    CreatedMember, ErrorEnvelope, Fetched, Outcome, PerMember, PerProject, PlaneCreated, Problem,
+    ProjectAdded, ProjectFetched, ProjectListing, ProjectSummary, Response,
 };
 
 /// Whether output is for a person or a program.
@@ -33,6 +35,9 @@ pub fn response(response: &Response, rendering: Rendering) -> String {
         }
         Rendering::Human => match response {
             Response::PlaneCreate(created) => plane(created),
+            Response::ProjectAdd(added) => project(added),
+            Response::ProjectList(listing) => projects(listing),
+            Response::ProjectFetch(fetched) => fetches(fetched),
         },
     }
 }
@@ -47,7 +52,7 @@ pub fn envelope(envelope: &ErrorEnvelope, rendering: Rendering) -> String {
 
 /// A plane, then one row per member in the order they were named.
 fn plane(created: &PlaneCreated) -> String {
-    let rows: Vec<[String; 4]> = created.members.iter().map(member_row).collect();
+    let rows: Vec<Vec<String>> = created.members.iter().map(member_row).collect();
 
     let mut text = format!(
         "{}  {}\n\n{}",
@@ -68,8 +73,97 @@ fn plane(created: &PlaneCreated) -> String {
     text
 }
 
+/// A registered project: what kind it is, and the three things a user needs to
+/// find it again.
+fn project(added: &ProjectAdded) -> String {
+    let default = added
+        .default_branch
+        .clone()
+        .unwrap_or_else(|| "unspecified".to_owned());
+
+    format!(
+        "{PROJECT_SIGIL}{}  {}\n{}",
+        added.name,
+        added.source.kind(),
+        columns(
+            &[
+                vec!["source".to_owned(), added.source.to_string()],
+                vec![
+                    "directory".to_owned(),
+                    added.directory.display().to_string()
+                ],
+                vec!["default".to_owned(), default],
+            ],
+            "  ",
+        )
+    )
+}
+
+/// One row per project, in name order.
+///
+/// A project whose file would not parse is a row too, naming the file and the
+/// error — the scan reported it rather than dying on it, and printing a count
+/// of the readable ones instead would hide exactly the project that needs
+/// looking at.
+fn projects(listing: &ProjectListing) -> String {
+    columns(
+        &listing.projects.iter().map(project_row).collect::<Vec<_>>(),
+        "  ",
+    )
+}
+
+/// `<project>  <kind>  <source>  [repo.git missing]`, or `<project>  <error>`.
+fn project_row(row: &PerProject<ProjectSummary>) -> Vec<String> {
+    let name = format!("{PROJECT_SIGIL}{}", row.project);
+
+    match &row.outcome {
+        Outcome::Ok(summary) => vec![
+            name,
+            summary.source.kind().to_owned(),
+            summary.source.to_string(),
+            if summary.source_repo_present {
+                String::new()
+            } else {
+                "repo.git missing".to_owned()
+            },
+        ],
+        Outcome::AlreadyDone => vec![name, "unchanged".to_owned()],
+        Outcome::Skipped(reason) => vec![name, format!("skipped: {}", reason.reason())],
+        Outcome::Failed(error) => vec![name, error.to_string()],
+    }
+}
+
+/// One row per project, in the order they were named.
+fn fetches(fetched: &ProjectFetched) -> String {
+    columns(
+        &fetched.projects.iter().map(fetch_row).collect::<Vec<_>>(),
+        "  ",
+    )
+}
+
+/// `<project>  <outcome>  <detail>`.
+fn fetch_row(row: &PerProject<Fetched>) -> Vec<String> {
+    let name = format!("{PROJECT_SIGIL}{}", row.project);
+
+    match &row.outcome {
+        Outcome::Ok(Fetched { updated: 0 }) => {
+            vec![name, "fetched".to_owned(), "up to date".to_owned()]
+        }
+        Outcome::Ok(Fetched { updated }) => vec![
+            name,
+            "fetched".to_owned(),
+            format!("{updated} {} updated", plural(*updated, "ref")),
+        ],
+        Outcome::AlreadyDone => vec![name, "fetched".to_owned(), "up to date".to_owned()],
+        // An adopted project has nothing to fetch, which is a row rather than
+        // an outcome word: there was no fetch to report on.
+        Outcome::Skipped(reason) => vec![name, dash(), reason.reason().to_owned()],
+        Outcome::Failed(error) => vec![name, "failed".to_owned(), error.to_string()],
+    }
+}
+
 /// `<member>  <branch>  <outcome>  <path>`.
-fn member_row(row: &PerMember<CreatedMember>) -> [String; 4] {
+fn member_row(row: &PerMember<CreatedMember>) -> Vec<String> {
     let (branch, outcome, path) = match &row.outcome {
         Outcome::Ok(member) => (
             member.branch.clone(),
@@ -87,7 +181,7 @@ fn member_row(row: &PerMember<CreatedMember>) -> [String; 4] {
         Outcome::Failed(error) => (dash(), format!("failed: {error}"), dash()),
     };
 
-    [row.member.to_string(), branch, outcome, path]
+    vec![row.member.to_string(), branch, outcome, path]
 }
 
 fn human_envelope(envelope: &ErrorEnvelope) -> String {
@@ -97,7 +191,7 @@ fn human_envelope(envelope: &ErrorEnvelope) -> String {
     // problems prints no indented block, a problem with no subject leaves the
     // column blank, and an absent remedy prints no line.
     if !envelope.problems.is_empty() {
-        let rows: Vec<[String; 2]> = envelope.problems.iter().map(problem_row).collect();
+        let rows: Vec<Vec<String>> = envelope.problems.iter().map(problem_row).collect();
         text.push('\n');
         text.push_str(&columns(&rows, "  "));
     }
@@ -109,35 +203,44 @@ fn human_envelope(envelope: &ErrorEnvelope) -> String {
     text
 }
 
-fn problem_row(problem: &Problem) -> [String; 2] {
-    [
+fn problem_row(problem: &Problem) -> Vec<String> {
+    vec![
         problem.subject.clone().unwrap_or_default(),
         problem.message.clone(),
     ]
 }
 
-/// Indented rows with every column but the last padded to its widest cell —
-/// the one grammar every fan-out and every problem block uses.
-fn columns<const N: usize>(rows: &[[String; N]], separator: &str) -> String {
-    let widths: Vec<usize> = (0..N)
-        .map(|column| {
-            rows.iter()
-                .map(|row| row[column].chars().count())
-                .max()
-                .unwrap_or(0)
-        })
-        .collect();
+/// Indented rows with every column but a row's own last padded to its widest
+/// cell — the one grammar every fan-out, every listing and every problem block
+/// uses.
+///
+/// **Rows may be ragged, and a row's last cell neither pads nor widens.** A
+/// project listing puts a whole parse error where another row has a kind and a
+/// source, and that error must not push its neighbours' sources off to the
+/// right; it is a differently shaped row, not a long one. A trailing empty cell
+/// is trimmed rather than printed, so a column nothing in this listing uses
+/// costs no trailing whitespace.
+fn columns(rows: &[Vec<String>], separator: &str) -> String {
+    let arity = rows.iter().map(Vec::len).max().unwrap_or(0);
+    let mut widths = vec![0usize; arity];
+
+    for row in rows {
+        for (column, cell) in row.iter().enumerate().take(row.len().saturating_sub(1)) {
+            widths[column] = widths[column].max(cell.chars().count());
+        }
+    }
 
     rows.iter()
         .map(|row| {
+            let last = row.len().saturating_sub(1);
             let cells: Vec<String> = row
                 .iter()
                 .enumerate()
                 .map(|(column, cell)| {
-                    if column + 1 == N {
+                    if column == last {
                         cell.clone()
                     } else {
-                        let padding = widths[column] - cell.chars().count();
+                        let padding = widths[column].saturating_sub(cell.chars().count());
                         format!("{cell}{}", " ".repeat(padding))
                     }
                 })
@@ -148,6 +251,15 @@ fn columns<const N: usize>(rows: &[[String; N]], separator: &str) -> String {
         .collect()
 }
 
+/// `ref` or `refs`, for a count the row prints.
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        noun.to_owned()
+    } else {
+        format!("{noun}s")
+    }
+}
+
 /// What a column holds when there is nothing to report there.
 fn dash() -> String {
     "-".to_owned()
@@ -156,7 +268,9 @@ fn dash() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitplane_core::{MemberRef, PlaneId, SkipReason, WorktreePath};
+    use bitplane_core::{
+        EngineError, MemberRef, PlaneId, ProjectName, ProjectSource, SkipReason, WorktreePath,
+    };
     use std::path::PathBuf;
 
     #[test]
@@ -281,6 +395,162 @@ mod tests {
         assert!(human.contains(json["message"].as_str().unwrap()));
         assert!(human.contains(json["remedy"].as_str().unwrap()));
         assert!(!human.contains("\"code\""), "the code is the exit status");
+    }
+
+    #[test]
+    fn a_registered_project_prints_its_kind_and_where_to_find_it() {
+        let rendered = response(
+            &Response::ProjectAdd(ProjectAdded {
+                name: ProjectName::parse("codestyle").unwrap(),
+                source: ProjectSource::Owned {
+                    url: "git@gitlab.com:acme/codestyle.git".to_owned(),
+                },
+                directory: PathBuf::from("/data/bitplane/projects/codestyle"),
+                default_branch: Some("main".to_owned()),
+            }),
+            Rendering::Human,
+        );
+
+        assert_eq!(
+            rendered,
+            concat!(
+                "@codestyle  owned\n",
+                "  source     git@gitlab.com:acme/codestyle.git\n",
+                "  directory  /data/bitplane/projects/codestyle\n",
+                "  default    main\n",
+            )
+        );
+    }
+
+    #[test]
+    fn a_forge_that_named_no_default_branch_says_so_rather_than_leaving_it_blank() {
+        let rendered = response(
+            &Response::ProjectAdd(ProjectAdded {
+                name: ProjectName::parse("empty").unwrap(),
+                source: ProjectSource::Owned {
+                    url: "git@gitlab.com:acme/empty.git".to_owned(),
+                },
+                directory: PathBuf::from("/data/bitplane/projects/empty"),
+                default_branch: None,
+            }),
+            Rendering::Human,
+        );
+
+        assert!(
+            rendered.ends_with("  default    unspecified\n"),
+            "got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn a_listing_prints_a_row_per_project_and_a_missing_repo_as_a_column() {
+        let rendered = response(&Response::ProjectList(listing()), Rendering::Human);
+
+        assert_eq!(
+            rendered,
+            concat!(
+                "  @api        owned    git@gitlab.com:acme/api.git        repo.git missing\n",
+                "  @bitplane   adopted  /Users/alfonz/projects/bitplane\n",
+                "  @codestyle  owned    git@gitlab.com:acme/codestyle.git\n",
+            )
+        );
+    }
+
+    #[test]
+    fn an_unreadable_project_is_a_row_that_does_not_widen_its_neighbours_columns() {
+        let mut listing = listing();
+        listing.projects[2] = PerProject::failed(
+            ProjectName::parse("codestyle").unwrap(),
+            EngineError::ParseError {
+                path: PathBuf::from("/data/projects/codestyle/project.toml"),
+                message: "unknown key \"default_branch\"".to_owned(),
+                legal_keys: Vec::new(),
+            },
+        );
+
+        let rendered = response(&Response::ProjectList(listing), Rendering::Human);
+
+        assert_eq!(
+            rendered,
+            concat!(
+                "  @api        owned    git@gitlab.com:acme/api.git      repo.git missing\n",
+                "  @bitplane   adopted  /Users/alfonz/projects/bitplane\n",
+                "  @codestyle  /data/projects/codestyle/project.toml: unknown key \"default_branch\"\n",
+            )
+        );
+    }
+
+    #[test]
+    fn a_fetch_prints_what_each_project_did_and_an_adopted_one_has_no_outcome() {
+        let rendered = response(
+            &Response::ProjectFetch(ProjectFetched {
+                projects: vec![
+                    PerProject::ok(ProjectName::parse("api").unwrap(), Fetched { updated: 3 }),
+                    PerProject::ok(ProjectName::parse("one").unwrap(), Fetched { updated: 1 }),
+                    PerProject::ok(
+                        ProjectName::parse("codestyle").unwrap(),
+                        Fetched { updated: 0 },
+                    ),
+                    PerProject::skipped(
+                        ProjectName::parse("bitplane").unwrap(),
+                        SkipReason::NothingToFetch,
+                    ),
+                    PerProject::failed(
+                        ProjectName::parse("web").unwrap(),
+                        EngineError::GitFailed {
+                            message: "git fetch exited 128: Connection refused".to_owned(),
+                        },
+                    ),
+                ],
+                interrupted: false,
+            }),
+            Rendering::Human,
+        );
+
+        assert_eq!(
+            rendered,
+            concat!(
+                "  @api        fetched  3 refs updated\n",
+                "  @one        fetched  1 ref updated\n",
+                "  @codestyle  fetched  up to date\n",
+                "  @bitplane   -        nothing to fetch (adopted)\n",
+                "  @web        failed   git fetch exited 128: Connection refused\n",
+            )
+        );
+    }
+
+    fn listing() -> ProjectListing {
+        ProjectListing {
+            projects: vec![
+                PerProject::ok(
+                    ProjectName::parse("api").unwrap(),
+                    ProjectSummary {
+                        source: ProjectSource::Owned {
+                            url: "git@gitlab.com:acme/api.git".to_owned(),
+                        },
+                        source_repo_present: false,
+                    },
+                ),
+                PerProject::ok(
+                    ProjectName::parse("bitplane").unwrap(),
+                    ProjectSummary {
+                        source: ProjectSource::Adopted {
+                            path: PathBuf::from("/Users/alfonz/projects/bitplane"),
+                        },
+                        source_repo_present: true,
+                    },
+                ),
+                PerProject::ok(
+                    ProjectName::parse("codestyle").unwrap(),
+                    ProjectSummary {
+                        source: ProjectSource::Owned {
+                            url: "git@gitlab.com:acme/codestyle.git".to_owned(),
+                        },
+                        source_repo_present: true,
+                    },
+                ),
+            ],
+        }
     }
 
     fn created() -> PlaneCreated {

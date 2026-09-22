@@ -8,8 +8,14 @@ use crate::engine::{Engine, Reader};
 use crate::error::EngineError;
 use crate::git::{GitPrerequisite, GitVersion, SystemGit};
 use crate::interrupt::Interrupt;
+use crate::project_add::{self, ProjectContext};
+use crate::project_fetch::{self, FetchContext};
+use crate::project_list;
 use crate::repo::Git;
-use crate::wire::{PlaneCreateRequest, PlaneCreated};
+use crate::wire::{
+    PlaneCreateRequest, PlaneCreated, ProjectAddRequest, ProjectAdded, ProjectFetchRequest,
+    ProjectFetched, ProjectListing,
+};
 
 /// bitplane on the local host.
 ///
@@ -82,7 +88,11 @@ impl LocalEngine {
     }
 }
 
-impl Reader for LocalEngine {}
+impl Reader for LocalEngine {
+    fn project_list(&self) -> Result<ProjectListing, EngineError> {
+        project_list::project_list(&self.directories)
+    }
+}
 
 impl Engine for LocalEngine {
     fn plane_create(&self, request: PlaneCreateRequest) -> Result<PlaneCreated, EngineError> {
@@ -92,6 +102,29 @@ impl Engine for LocalEngine {
                 directories: &self.directories,
                 git: &self.git,
                 home: self.home.as_deref(),
+                interrupt: self.interrupt,
+                on_lock_wait: &*self.on_lock_wait,
+            },
+        )
+    }
+
+    fn project_add(&self, request: ProjectAddRequest) -> Result<ProjectAdded, EngineError> {
+        project_add::project_add(
+            &request,
+            &ProjectContext {
+                directories: &self.directories,
+                git: &self.git,
+                on_lock_wait: &*self.on_lock_wait,
+            },
+        )
+    }
+
+    fn project_fetch(&self, request: ProjectFetchRequest) -> Result<ProjectFetched, EngineError> {
+        project_fetch::project_fetch(
+            &request,
+            &FetchContext {
+                directories: &self.directories,
+                git: &self.git,
                 interrupt: self.interrupt,
                 on_lock_wait: &*self.on_lock_wait,
             },
