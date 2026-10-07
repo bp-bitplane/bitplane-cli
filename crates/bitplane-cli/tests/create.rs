@@ -103,6 +103,61 @@ fn a_taken_id_exits_2_with_a_remedy_naming_what_is_there() {
 }
 
 #[test]
+fn here_makes_the_plane_in_the_current_directory_and_names_it_after_it() {
+    let host = Host::new("cli-create-here");
+    let alpha = host.repository("alpha");
+    let beta = host.repository("beta");
+
+    for (flag, id, member) in [("--here", "auth-work", &alpha), ("-c", "billing", &beta)] {
+        let here = host.planes().join(id);
+        fs::create_dir_all(&here).unwrap();
+
+        let run = host.bp_in(
+            &here,
+            &[
+                "create",
+                &member.display().to_string(),
+                "-b",
+                "feat-login",
+                flag,
+            ],
+        );
+
+        assert_eq!(run.status.code(), Some(0), "stderr: {}", stderr(&run));
+        assert!(
+            stdout(&run).starts_with(&format!("{id}  {}/{id}\n", host.planes().display())),
+            "got: {}",
+            stdout(&run)
+        );
+    }
+}
+
+#[test]
+fn here_cannot_be_combined_with_an_id() {
+    let host = Host::new("cli-create-here-id");
+    let alpha = host.repository("alpha");
+    let here = host.planes().join("auth-work");
+    fs::create_dir_all(&here).unwrap();
+
+    let run = host.bp_in(
+        &here,
+        &[
+            "create",
+            &alpha.display().to_string(),
+            "-b",
+            "feat-login",
+            "--here",
+            "--id",
+            "auth-work",
+        ],
+    );
+
+    assert_eq!(run.status.code(), Some(2), "stderr: {}", stderr(&run));
+    assert!(stderr(&run).contains("--id"), "got: {}", stderr(&run));
+    assert_eq!(fs::read_dir(&here).unwrap().count(), 0);
+}
+
+#[test]
 fn an_occupied_branch_exits_1_and_says_so_in_bitplanes_own_words() {
     let host = Host::new("cli-create-occupied");
     let alpha = host.repository("alpha");
@@ -315,6 +370,13 @@ impl Host {
 
     fn bp(&self, arguments: &[&str]) -> Output {
         self.command(arguments).output().expect("run bp")
+    }
+
+    fn bp_in(&self, directory: &Path, arguments: &[&str]) -> Output {
+        self.command(arguments)
+            .current_dir(directory)
+            .output()
+            .expect("run bp")
     }
 
     fn spawn(&self, arguments: &[&str]) -> Child {

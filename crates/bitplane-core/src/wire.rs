@@ -116,8 +116,12 @@ pub struct PlaneCreateRequest {
     /// The branch for every member that does not carry its own. Applied at
     /// this moment and not remembered: a plane has no branch.
     pub branch: Option<String>,
-    /// The plane id. `None` generates one.
+    /// The plane id. `None` generates one, unless `here` names it.
     pub id: Option<String>,
+    /// `--here`: make the plane in this directory, which already exists, and
+    /// name it after it. It must be empty and directly inside the planes
+    /// directory. Never set together with `id`.
+    pub here: Option<PathBuf>,
     pub intent: BranchIntent,
     /// Whether to bring every **owned** project named up to date first, so the
     /// branch resolves against what the forge actually has.
@@ -187,6 +191,11 @@ pub struct PlaneCreated {
     /// same thing through `CreateAborted`'s own `remnant`, and a plane that was
     /// built has nothing to leave behind.
     pub remnant: bool,
+    /// Whether the plane directory was the user's before `create` ran
+    /// (`--here`), so an abort empties it rather than removing it. Left out of
+    /// the wire when unset, so a `--here` plane answers exactly as any other.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub kept_directory: bool,
     /// What each `post_worktree_create` script did, in the order they ran.
     /// Empty where no member declared one, or where `--no-scripts` was given.
     pub scripts: Vec<ScriptOutcome>,
@@ -697,6 +706,7 @@ mod tests {
             members: vec!["@api".to_owned(), "~/projects/bitplane:feat-x".to_owned()],
             branch: Some("feat-login".to_owned()),
             id: Some("auth-work".to_owned()),
+            here: None,
             intent: BranchIntent::RequireNew,
             fetch: true,
             run_scripts: true,

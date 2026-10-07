@@ -4,12 +4,9 @@ title: bp create
 
 # `bp create`
 
-:::in-progress
+:::implemented
 
-Everything on this page works as described, except:
-
-- **`--here` is not accepted.**
-- **`-c` is not accepted.**
+Everything on this page works as described.
 
 :::
 

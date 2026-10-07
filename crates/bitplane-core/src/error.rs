@@ -66,12 +66,19 @@ pub enum EngineError {
     /// The request could not be acted on as given.
     InvalidRequest { message: String },
     /// A user-chosen plane id starting with the reserved generated-id prefix.
-    ReservedPlaneId,
+    /// `from_directory` where `bp create --here` took it from the directory's
+    /// name, so the message names the directory rather than an id nobody typed.
+    ReservedPlaneId { id: String, from_directory: bool },
     /// A plane id outside `[a-z0-9][a-z0-9._-]*`, 64 characters at most.
-    InvalidPlaneId { id: String },
+    InvalidPlaneId { id: String, from_directory: bool },
     /// The id names something that is already there. Classified, so the remedy
     /// names what is actually at the path (ADR-0004).
     PlaneIdInUse { id: String, found: Occupant },
+    /// `bp create --here` from a directory that is not directly inside the
+    /// planes directory.
+    NotInPlanesDir { directory: PathBuf, planes: PathBuf },
+    /// `bp create --here` from a directory holding anything at all.
+    PlaneDirNotEmpty { directory: PathBuf },
     /// A string that is not a project name, where one was required.
     InvalidProjectName { name: String },
     /// A project name using `repo.git` or `bin` as a segment — both directories
@@ -227,6 +234,9 @@ pub enum EngineError {
         rollback: Vec<PerMember<()>>,
         /// Whether the unwind itself failed, leaving a directory behind.
         remnant: bool,
+        /// Whether the plane directory was the user's before `create` ran
+        /// (`--here`), so the unwind emptied it rather than removing it.
+        kept_directory: bool,
     },
     /// `add` put nothing into the plane. The per-member rows ride inside the
     /// error, as they do for [`EngineError::CreateAborted`] — but the plane
@@ -355,9 +365,11 @@ impl EngineError {
             EngineError::GitVersionUnreadable { .. } => "git_version_unreadable",
             EngineError::GitTooOld { .. } => "git_too_old",
             EngineError::InvalidRequest { .. } => "invalid_request",
-            EngineError::ReservedPlaneId => "reserved_plane_id",
+            EngineError::ReservedPlaneId { .. } => "reserved_plane_id",
             EngineError::InvalidPlaneId { .. } => "invalid_plane_id",
             EngineError::PlaneIdInUse { .. } => "plane_id_in_use",
+            EngineError::NotInPlanesDir { .. } => "not_in_planes_dir",
+            EngineError::PlaneDirNotEmpty { .. } => "plane_dir_not_empty",
             EngineError::InvalidProjectName { .. } => "invalid_project_name",
             EngineError::ReservedNameSegment { .. } => "reserved_name_segment",
             EngineError::ProjectNameNests { .. } => "project_name_nests",
@@ -405,9 +417,11 @@ impl EngineError {
             // Usage: the request was malformed, or what it asked to create
             // already exists. Re-running it identically will never help.
             EngineError::InvalidRequest { .. }
-            | EngineError::ReservedPlaneId
+            | EngineError::ReservedPlaneId { .. }
             | EngineError::InvalidPlaneId { .. }
             | EngineError::PlaneIdInUse { .. }
+            | EngineError::NotInPlanesDir { .. }
+            | EngineError::PlaneDirNotEmpty { .. }
             | EngineError::InvalidProjectName { .. }
             | EngineError::ReservedNameSegment { .. }
             | EngineError::ProjectNameNests { .. }
@@ -549,12 +563,27 @@ impl EngineError {
             EngineError::LockTimeout { .. } => {
                 Some("Another bitplane process holds it; retry once that one finishes.".to_owned())
             }
-            EngineError::ReservedPlaneId => Some(format!(
-                "Choose an id that does not start with {GENERATED_ID_PREFIX}."
+            EngineError::ReservedPlaneId { from_directory, .. } => Some(match from_directory {
+                true => {
+                    format!("Rename the directory so it does not start with {GENERATED_ID_PREFIX}.")
+                }
+                false => format!("Choose an id that does not start with {GENERATED_ID_PREFIX}."),
+            }),
+            EngineError::InvalidPlaneId { from_directory, .. } => Some(format!(
+                "{}lowercase letters, digits and . _ - ; start with a letter or digit; \
+                 64 characters at most.",
+                match from_directory {
+                    true => "Rename the directory using ",
+                    false => "Use ",
+                }
             )),
-            EngineError::InvalidPlaneId { .. } => Some(
-                "Use lowercase letters, digits and . _ - ; start with a letter or digit; \
-                 64 characters at most."
+            EngineError::NotInPlanesDir { planes, .. } => Some(format!(
+                "Run it from an empty directory directly inside {}, or run bp create without \
+                 --here.",
+                planes.display()
+            )),
+            EngineError::PlaneDirNotEmpty { .. } => Some(
+                "--here needs an empty directory; empty it, or run bp create without --here."
                     .to_owned(),
             ),
             EngineError::PlaneIdInUse { id, found } => Some(match found {
@@ -774,13 +803,30 @@ impl fmt::Display for EngineError {
                 )
             }
             EngineError::InvalidRequest { message } => write!(f, "{message}"),
-            EngineError::ReservedPlaneId => {
-                write!(
+            EngineError::ReservedPlaneId { id, from_directory } => match from_directory {
+                true => write!(
+                    f,
+                    "the directory {id} starts with {GENERATED_ID_PREFIX}, which is reserved for \
+                     generated plane ids"
+                ),
+                false => write!(
                     f,
                     "{GENERATED_ID_PREFIX} is reserved for generated plane ids"
-                )
+                ),
+            },
+            EngineError::InvalidPlaneId { id, from_directory } => match from_directory {
+                true => write!(f, "the directory {id} is not a valid plane id"),
+                false => write!(f, "{id} is not a valid plane id"),
+            },
+            EngineError::NotInPlanesDir { directory, planes } => write!(
+                f,
+                "{} is not directly inside {}",
+                directory.display(),
+                planes.display()
+            ),
+            EngineError::PlaneDirNotEmpty { directory } => {
+                write!(f, "{} is not empty", directory.display())
             }
-            EngineError::InvalidPlaneId { id } => write!(f, "{id} is not a valid plane id"),
             EngineError::PlaneIdInUse { id, found } => match found {
                 Occupant::Plane => write!(f, "{id} is already a plane"),
                 Occupant::LatchedRemnant => {
@@ -882,14 +928,23 @@ impl fmt::Display for EngineError {
                 write!(f, "{}: {message}", path.display())
             }
             EngineError::GitFailed { message } => f.write_str(message),
-            EngineError::CreateAborted { id, remnant, .. } => {
+            EngineError::CreateAborted {
+                id,
+                remnant,
+                kept_directory,
+                ..
+            } => {
+                let taken_back = match kept_directory {
+                    true => "emptied",
+                    false => "removed",
+                };
                 if *remnant {
                     write!(
                         f,
-                        "create did not finish and {id} could not be fully removed"
+                        "create did not finish and {id} could not be fully {taken_back}"
                     )
                 } else {
-                    write!(f, "create did not finish; {id} was removed")
+                    write!(f, "create did not finish; {id} was {taken_back}")
                 }
             }
             EngineError::AddAborted { plane, remnant, .. } => {

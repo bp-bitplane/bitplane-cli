@@ -21,6 +21,10 @@
 //! collected **before the claim**, so the common mistake fails with nothing
 //! created at all.
 //!
+//! Under **`--here`** the plane directory is the one the user is standing in:
+//! step 1 becomes `mkdir <plane-dir>/.bitplane/`, and the abort path empties the
+//! directory rather than removing it, because the user made it, not `bp`.
+//!
 //! The **fetch is outside the window too**, before step 1: it writes the source
 //! repo rather than the plane, so a retry finds it warm, and the branch the
 //! user asked for has to resolve against what the forge actually has rather
@@ -39,7 +43,7 @@ use crate::error::EngineError;
 use crate::interrupt::Interrupt;
 use crate::outcome::{Outcome, PerMember};
 use crate::plan::{self, PlanContext, PlannedMember};
-use crate::plane_dir::ClaimedPlane;
+use crate::plane_dir::{self, ClaimedPlane};
 use crate::plane_file::{Member, PlaneFile};
 use crate::plane_id::PlaneId;
 use crate::project_fetch::{self, FetchContext};
@@ -98,12 +102,9 @@ pub fn plane_create(
         &request.members,
     )?;
 
+    let destination = Destination::of(request, context.directories)?;
     let planned = plan(request, context)?;
-
-    let claimed = match &request.id {
-        Some(id) => ClaimedPlane::claim(context.directories, PlaneId::chosen(id)?)?,
-        None => ClaimedPlane::claim_generated(context.directories)?,
-    };
+    let claimed = destination.claim(context.directories)?;
 
     // Held until the plane is complete. On the sentinel, never on `plane.toml`.
     let lock = claimed.lock(context.on_lock_wait)?;
@@ -154,6 +155,7 @@ pub fn plane_create(
         members,
         interrupted: context.interrupt.is_raised(),
         remnant: false,
+        kept_directory: claimed.kept_directory(),
         scripts,
     })
 }
@@ -316,6 +318,7 @@ fn unwind(
             members,
             interrupted: true,
             remnant: !discarded,
+            kept_directory: claimed.kept_directory(),
             scripts: Vec::new(),
         });
     }
@@ -325,7 +328,41 @@ fn unwind(
         members,
         rollback,
         remnant: !discarded,
+        kept_directory: claimed.kept_directory(),
     })
+}
+
+/// Where the plane is made, checked before anything is fetched or claimed.
+enum Destination {
+    Generated,
+    Chosen(PlaneId),
+    Here(PlaneId),
+}
+
+impl Destination {
+    fn of(
+        request: &PlaneCreateRequest,
+        directories: &Directories,
+    ) -> Result<Destination, EngineError> {
+        match (&request.id, &request.here) {
+            (Some(_), Some(_)) => Err(EngineError::InvalidRequest {
+                message: "--here cannot be combined with --id".to_owned(),
+            }),
+            (Some(id), None) => Ok(Destination::Chosen(PlaneId::chosen(id)?)),
+            (None, Some(directory)) => {
+                Ok(Destination::Here(plane_dir::here(directories, directory)?))
+            }
+            (None, None) => Ok(Destination::Generated),
+        }
+    }
+
+    fn claim(self, directories: &Directories) -> Result<ClaimedPlane, EngineError> {
+        match self {
+            Destination::Generated => ClaimedPlane::claim_generated(directories),
+            Destination::Chosen(id) => ClaimedPlane::claim(directories, id),
+            Destination::Here(id) => ClaimedPlane::claim_here(directories, id),
+        }
+    }
 }
 
 fn membership(id: PlaneId, planned: &[PlannedMember]) -> PlaneFile {

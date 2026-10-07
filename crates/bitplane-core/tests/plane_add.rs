@@ -540,6 +540,7 @@ impl Host {
                     .collect(),
                 branch: Some(branch.to_owned()),
                 id: Some("auth-work".to_owned()),
+                here: None,
                 intent: BranchIntent::Resolve,
                 fetch: true,
                 run_scripts: true,

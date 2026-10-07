@@ -1030,6 +1030,7 @@ impl Host {
                 members: members.iter().map(|member| (*member).to_owned()).collect(),
                 branch: Some(branch.to_owned()),
                 id: None,
+                here: None,
                 intent: BranchIntent::Resolve,
                 fetch: true,
                 run_scripts: true,

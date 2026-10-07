@@ -78,8 +78,12 @@ fn plane(created: &PlaneCreated) -> String {
     // An interrupt that could not take the whole plane back has left something,
     // and the rows alone do not say so.
     if created.remnant {
+        let taken_back = match created.kept_directory {
+            true => "emptied",
+            false => "removed",
+        };
         text.push_str(&format!(
-            "\n{} could not be fully removed; run bp destroy -p {} to clear the remnant.\n",
+            "\n{} could not be fully {taken_back}; run bp destroy -p {} to clear the remnant.\n",
             created.id, created.id
         ));
     }
@@ -686,6 +690,28 @@ mod tests {
     }
 
     #[test]
+    fn a_here_remnant_says_the_directory_was_not_fully_emptied() {
+        let mut plane = created();
+        plane.interrupted = true;
+        plane.remnant = true;
+        plane.kept_directory = true;
+
+        let rendered = response(&Response::PlaneCreate(plane), Rendering::Human);
+
+        assert!(
+            rendered.contains("bp-7c1e0d44 could not be fully emptied;"),
+            "got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn a_plane_that_was_not_made_here_carries_no_kept_directory_on_the_wire() {
+        let rendered = response(&Response::PlaneCreate(created()), Rendering::Json);
+
+        assert!(!rendered.contains("kept_directory"), "got:\n{rendered}");
+    }
+
+    #[test]
     fn an_interrupt_that_left_a_remnant_says_so_and_names_the_way_out() {
         let mut plane = created();
         plane.interrupted = true;
@@ -1287,6 +1313,7 @@ mod tests {
             ],
             interrupted: false,
             remnant: false,
+            kept_directory: false,
             scripts: Vec::new(),
         }
     }

@@ -38,10 +38,14 @@ impl PlaneId {
     /// before the charset, so `bp-Auth` is reported as reserved rather than as
     /// badly spelled — the prefix is the rule the user has to learn.
     pub fn chosen(id: &str) -> Result<PlaneId, EngineError> {
-        if id.starts_with(GENERATED_ID_PREFIX) {
-            return Err(EngineError::ReservedPlaneId);
-        }
-        PlaneId::parse(id)
+        PlaneId::checked(id, false)
+    }
+
+    /// A directory's name taken as a chosen id, by `bp create --here`. The
+    /// same rules as [`PlaneId::chosen`], with the failure saying the name came
+    /// from the directory rather than from an id nobody typed.
+    pub fn of_directory(name: &str) -> Result<PlaneId, EngineError> {
+        PlaneId::checked(name, true)
     }
 
     /// An id read from a file or generated. Checks the charset and nothing
@@ -50,7 +54,10 @@ impl PlaneId {
         if is_well_formed_id(id) {
             Ok(PlaneId(id.to_owned()))
         } else {
-            Err(EngineError::InvalidPlaneId { id: id.to_owned() })
+            Err(EngineError::InvalidPlaneId {
+                id: id.to_owned(),
+                from_directory: false,
+            })
         }
     }
 
@@ -78,6 +85,19 @@ impl PlaneId {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    fn checked(id: &str, from_directory: bool) -> Result<PlaneId, EngineError> {
+        if id.starts_with(GENERATED_ID_PREFIX) {
+            return Err(EngineError::ReservedPlaneId {
+                id: id.to_owned(),
+                from_directory,
+            });
+        }
+        PlaneId::parse(id).map_err(|_| EngineError::InvalidPlaneId {
+            id: id.to_owned(),
+            from_directory,
+        })
     }
 }
 
@@ -178,7 +198,10 @@ mod tests {
         for id in ["bp-a3f9c2e1", "bp-", "bp-mine"] {
             assert_eq!(
                 PlaneId::chosen(id).unwrap_err(),
-                EngineError::ReservedPlaneId,
+                EngineError::ReservedPlaneId {
+                    id: id.to_owned(),
+                    from_directory: false,
+                },
                 "for {id}"
             );
         }

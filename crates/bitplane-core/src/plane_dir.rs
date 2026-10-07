@@ -5,6 +5,11 @@
 //! fails `EEXIST`. Never probe first: an `exists()`-then-create is a TOCTOU that
 //! two concurrent `bp create`s both pass (ADR-0002).
 //!
+//! `bp create --here` is the one exception: the directory is already there, the
+//! user's, and empty, so the claim is an atomic `mkdir` of `.bitplane/` inside
+//! it instead — and taking the claim back empties the directory rather than
+//! removing it.
+//!
 //! `.bitplane/` at the root is reserved for bitplane's own per-plane files: the
 //! lock sentinel and the incomplete latch. It sits outside every repo, so
 //! nothing in it can be committed by accident.
@@ -33,6 +38,8 @@ pub const LATCH_NAME: &str = "incomplete";
 pub struct ClaimedPlane {
     id: PlaneId,
     path: PathBuf,
+    /// Whether the directory was the user's before the claim (`--here`).
+    kept_directory: bool,
 }
 
 impl ClaimedPlane {
@@ -45,13 +52,51 @@ impl ClaimedPlane {
         let path = directories.plane(&id);
 
         match mkdir(directories.planes(), &path) {
-            Ok(()) => Ok(ClaimedPlane { id, path }),
+            Ok(()) => Ok(ClaimedPlane::new(id, path, false)),
             Err(Claim::Taken) => Err(EngineError::PlaneIdInUse {
                 id: id.to_string(),
                 found: classify(&path),
             }),
             Err(Claim::Refused(error)) => Err(error),
         }
+    }
+
+    /// Claims the directory `bp create --here` was run from, which
+    /// [`here`] has already checked.
+    ///
+    /// The directory exists, so the claim is `mkdir .bitplane/` inside it —
+    /// the same atomic `EEXIST` a second `--here` in the same directory loses
+    /// on. Anything else that arrived since the check is refused too, with the
+    /// claim taken back, so an abort can never empty out something the user put
+    /// there.
+    pub fn claim_here(directories: &Directories, id: PlaneId) -> Result<ClaimedPlane, EngineError> {
+        let path = directories.plane(&id);
+        let bitplane = path.join(BITPLANE_DIR);
+        let not_empty = || EngineError::PlaneDirNotEmpty {
+            directory: path.clone(),
+        };
+
+        match fs::create_dir(&bitplane) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => return Err(not_empty()),
+            Err(err) => return Err(EngineError::io(&bitplane, err)),
+        }
+
+        let settled = match entries(&path) {
+            Ok(found) if found.len() > 1 => Err(not_empty()),
+            Ok(_) => fsio::sync_directory(&path),
+            Err(error) => Err(error),
+        };
+
+        // A claim that did not land takes its `.bitplane/` back with it, or
+        // every later `--here` here would be refused over a directory the user
+        // never made. Best effort: the failure being reported is the first one.
+        if let Err(error) = settled {
+            let _ = fs::remove_dir(&bitplane);
+            return Err(error);
+        }
+
+        Ok(ClaimedPlane::new(id, path, true))
     }
 
     /// Claims a directory under a generated id, retrying on collision.
@@ -78,7 +123,7 @@ impl ClaimedPlane {
             let path = directories.plane(&id);
 
             match mkdir(directories.planes(), &path) {
-                Ok(()) => return Ok(ClaimedPlane { id, path }),
+                Ok(()) => return Ok(ClaimedPlane::new(id, path, false)),
                 Err(Claim::Taken) => last = Some(id),
                 Err(Claim::Refused(error)) => return Err(error),
             }
@@ -96,6 +141,12 @@ impl ClaimedPlane {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Whether the directory was the user's before the claim, so
+    /// [`ClaimedPlane::discard`] empties it rather than removing it.
+    pub fn kept_directory(&self) -> bool {
+        self.kept_directory
     }
 
     /// Takes the plane's lock.
@@ -141,11 +192,35 @@ impl ClaimedPlane {
     ///
     /// Only ever called inside the abort window, which by construction holds
     /// nothing the user has touched.
+    ///
+    /// A `--here` directory is the user's, so it is **emptied** and kept —
+    /// `.bitplane/` last, so a discard that fails partway still leaves the
+    /// latch saying the plane never worked.
     pub fn discard(&self) -> Result<(), EngineError> {
-        match fs::remove_dir_all(&self.path) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(EngineError::io(&self.path, err)),
+        if !self.kept_directory {
+            return remove_all(&self.path);
+        }
+
+        let found = match entries(&self.path) {
+            Ok(found) => found,
+            Err(_) if !self.path.exists() => return Ok(()),
+            Err(error) => return Err(error),
+        };
+
+        for entry in found {
+            if entry.file_name().is_some_and(|name| name != BITPLANE_DIR) {
+                remove_all(&entry)?;
+            }
+        }
+
+        remove_all(&self.path.join(BITPLANE_DIR))
+    }
+
+    fn new(id: PlaneId, path: PathBuf, kept_directory: bool) -> ClaimedPlane {
+        ClaimedPlane {
+            id,
+            path,
+            kept_directory,
         }
     }
 
@@ -261,6 +336,40 @@ impl OpenPlane {
     }
 }
 
+/// The plane id `bp create --here` would make, from the directory it was run
+/// in — checked before anything is fetched or claimed.
+///
+/// Every rule a chosen id obeys still applies. The directory must be **directly
+/// inside** the planes directory, both compared after resolving symlinks; its
+/// name must be a valid chosen id; and it must be **empty**, dotfiles included.
+pub fn here(directories: &Directories, directory: &Path) -> Result<PlaneId, EngineError> {
+    let canonical = directory
+        .canonicalize()
+        .map_err(|err| EngineError::io(directory, err))?;
+    let planes = directories.planes().canonicalize().ok();
+
+    if planes.is_none() || canonical.parent() != planes.as_deref() {
+        return Err(EngineError::NotInPlanesDir {
+            directory: canonical,
+            planes: directories.planes().to_path_buf(),
+        });
+    }
+
+    let name = canonical
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let id = PlaneId::of_directory(&name)?;
+
+    if !entries(&canonical)?.is_empty() {
+        return Err(EngineError::PlaneDirNotEmpty {
+            directory: directories.plane(&id),
+        });
+    }
+
+    Ok(id)
+}
+
 fn lock_plane(plane: &Path, on_contended: impl FnOnce(&Path)) -> Result<Lock, EngineError> {
     make_bitplane_dir(plane)?;
     Lock::acquire(
@@ -278,6 +387,32 @@ fn make_bitplane_dir(plane: &Path) -> Result<(), EngineError> {
     let path = plane.join(BITPLANE_DIR);
 
     fs::create_dir_all(&path).map_err(|err| EngineError::io(&path, err))
+}
+
+/// Everything directly inside a directory.
+fn entries(directory: &Path) -> Result<Vec<PathBuf>, EngineError> {
+    fs::read_dir(directory)
+        .and_then(|entries| {
+            entries
+                .map(|entry| entry.map(|entry| entry.path()))
+                .collect()
+        })
+        .map_err(|err| EngineError::io(directory, err))
+}
+
+/// Removes a file, a symlink or a whole directory, without following a symlink.
+fn remove_all(path: &Path) -> Result<(), EngineError> {
+    let removed = match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(path),
+        Ok(_) => fs::remove_file(path),
+        Err(err) => Err(err),
+    };
+
+    match removed {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(EngineError::io(path, err)),
+    }
 }
 
 /// What is at a plane directory that could not be claimed.

@@ -157,6 +157,10 @@ struct CreateArgs {
     #[arg(long, value_name = "id")]
     id: Option<String>,
 
+    /// Make the plane in the current directory, named after it.
+    #[arg(short = 'c', long, conflicts_with = "id")]
+    here: bool,
+
     #[command(flatten)]
     intent: BranchIntentArgs,
 
@@ -553,6 +557,7 @@ fn request_for(command: Command) -> Result<Request, EngineError> {
             members: args.members,
             branch: args.branch,
             id: args.id,
+            here: args.here.then(current_dir),
             intent: args.intent.into(),
             fetch: !args.fetch.no_fetch,
             run_scripts: !args.scripts.no_scripts,
@@ -594,9 +599,14 @@ fn plane_ref(args: PlaneArgs) -> PlaneRef {
     match args.plane {
         Some(id) => PlaneRef::Id { id },
         None => PlaneRef::ContainingPath {
-            path: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            path: current_dir(),
         },
     }
+}
+
+/// Where `bp` was run from, carried as a path so the **engine** reads it.
+fn current_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// One `--waive` value, checked here so a misspelled reason is a usage failure

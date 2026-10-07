@@ -303,11 +303,222 @@ fn a_chosen_id_with_the_reserved_prefix_is_rejected() {
         })
         .unwrap_err();
 
-    assert_eq!(error, EngineError::ReservedPlaneId);
+    assert_eq!(
+        error,
+        EngineError::ReservedPlaneId {
+            id: "bp-mine".to_owned(),
+            from_directory: false,
+        }
+    );
     assert!(
         !host.planes().join("bp-mine").exists(),
         "a rejected id must claim nothing"
     );
+}
+
+#[test]
+fn here_names_the_plane_after_the_directory_it_is_made_in() {
+    let host = Host::new("create-here");
+    let alpha = host.repository("alpha");
+    let here = host.empty_plane_dir("auth-work");
+
+    let created = host.create(here_request(&here, &[&alpha])).unwrap();
+
+    assert_eq!(created.id.as_str(), "auth-work");
+    assert_eq!(created.directory, host.planes().join("auth-work"));
+    assert!(here.join("plane.toml").is_file());
+    assert!(!here.join(BITPLANE_DIR).join(LATCH_NAME).exists());
+    assert!(here.join("repos/alpha/.git").exists());
+}
+
+#[test]
+fn here_resolves_symlinks_on_both_sides_before_comparing() {
+    let host = Host::new("create-here-symlink");
+    let alpha = host.repository("alpha");
+    host.empty_plane_dir("auth-work");
+    let alias = host.root.join("elsewhere");
+    std::os::unix::fs::symlink(host.planes().join("auth-work"), &alias).unwrap();
+
+    let created = host.create(here_request(&alias, &[&alpha])).unwrap();
+
+    assert_eq!(created.id.as_str(), "auth-work");
+}
+
+#[test]
+fn here_outside_the_planes_directory_is_refused_before_anything_is_claimed() {
+    let host = Host::new("create-here-outside");
+    let alpha = host.repository("alpha");
+    let outside = host.root.join("src/auth-work");
+    fs::create_dir_all(&outside).unwrap();
+
+    let error = host.create(here_request(&outside, &[&alpha])).unwrap_err();
+
+    assert!(
+        matches!(error, EngineError::NotInPlanesDir { .. }),
+        "got {error:?}"
+    );
+    assert_eq!(error.tag(), "not_in_planes_dir");
+    assert_eq!(error.exit_code(), ExitCode::Usage);
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+}
+
+#[test]
+fn here_below_a_plane_directory_is_not_directly_inside_the_planes_directory() {
+    let host = Host::new("create-here-nested");
+    let alpha = host.repository("alpha");
+    let nested = host.empty_plane_dir("auth-work").join("deeper");
+    fs::create_dir_all(&nested).unwrap();
+
+    let error = host.create(here_request(&nested, &[&alpha])).unwrap_err();
+
+    assert!(
+        matches!(error, EngineError::NotInPlanesDir { .. }),
+        "got {error:?}"
+    );
+}
+
+#[test]
+fn here_in_a_directory_with_the_reserved_prefix_is_refused_naming_the_directory() {
+    let host = Host::new("create-here-reserved");
+    let alpha = host.repository("alpha");
+    let here = host.empty_plane_dir("bp-mine");
+
+    let error = host.create(here_request(&here, &[&alpha])).unwrap_err();
+
+    assert_eq!(
+        error,
+        EngineError::ReservedPlaneId {
+            id: "bp-mine".to_owned(),
+            from_directory: true,
+        }
+    );
+    assert!(error.to_string().contains("directory"), "got {error}");
+    assert_eq!(fs::read_dir(&here).unwrap().count(), 0);
+}
+
+#[test]
+fn here_in_a_directory_whose_name_is_not_an_id_is_refused_naming_the_directory() {
+    let host = Host::new("create-here-invalid");
+    let alpha = host.repository("alpha");
+    let here = host.empty_plane_dir("Auth_Work");
+
+    let error = host.create(here_request(&here, &[&alpha])).unwrap_err();
+
+    assert_eq!(
+        error,
+        EngineError::InvalidPlaneId {
+            id: "Auth_Work".to_owned(),
+            from_directory: true,
+        }
+    );
+    assert!(error.to_string().contains("directory"), "got {error}");
+}
+
+#[test]
+fn here_in_a_directory_holding_anything_at_all_is_refused() {
+    let host = Host::new("create-here-not-empty");
+    let alpha = host.repository("alpha");
+    let here = host.empty_plane_dir("auth-work");
+    fs::write(here.join(".DS_Store"), "").unwrap();
+
+    let error = host.create(here_request(&here, &[&alpha])).unwrap_err();
+
+    assert_eq!(
+        error,
+        EngineError::PlaneDirNotEmpty {
+            directory: host.planes().join("auth-work"),
+        }
+    );
+    assert_eq!(error.exit_code(), ExitCode::Usage);
+    assert!(!here.join(BITPLANE_DIR).exists(), "nothing was claimed");
+}
+
+#[test]
+fn here_in_a_directory_that_is_already_a_plane_is_refused() {
+    let host = Host::new("create-here-twice");
+    let alpha = host.repository("alpha");
+    let beta = host.repository("beta");
+    let here = host.empty_plane_dir("auth-work");
+    host.create(here_request(&here, &[&alpha])).unwrap();
+
+    let error = host.create(here_request(&here, &[&beta])).unwrap_err();
+
+    assert!(
+        matches!(error, EngineError::PlaneDirNotEmpty { .. }),
+        "got {error:?}"
+    );
+}
+
+#[test]
+fn here_and_a_chosen_id_together_are_an_invalid_request() {
+    let host = Host::new("create-here-and-id");
+    let alpha = host.repository("alpha");
+    let here = host.empty_plane_dir("auth-work");
+
+    let error = host
+        .create(PlaneCreateRequest {
+            id: Some("auth-work".to_owned()),
+            ..here_request(&here, &[&alpha])
+        })
+        .unwrap_err();
+
+    assert!(
+        matches!(error, EngineError::InvalidRequest { .. }),
+        "got {error:?}"
+    );
+}
+
+#[test]
+fn a_failure_under_here_unwinds_and_empties_the_directory_rather_than_removing_it() {
+    let host = Host::new("create-here-abort");
+    let alpha = host.repository("alpha");
+    let beta = refusing_new_worktrees(host.repository("beta"));
+    let here = host.empty_plane_dir("auth-work");
+
+    let error = host
+        .create(here_request(&here, &[&alpha, &beta]))
+        .unwrap_err();
+
+    let EngineError::CreateAborted {
+        remnant,
+        kept_directory,
+        ..
+    } = &error
+    else {
+        panic!("expected create_aborted, got {error:?}");
+    };
+    assert!(!remnant);
+    assert!(kept_directory);
+    assert_eq!(
+        error.to_string(),
+        "create did not finish; auth-work was emptied"
+    );
+
+    assert!(here.is_dir(), "the directory was the user's before bp ran");
+    assert_eq!(
+        fs::read_dir(&here).unwrap().count(),
+        0,
+        "and it is left as empty as it was found"
+    );
+    assert_eq!(worktrees_of(&alpha), 1);
+}
+
+#[test]
+fn an_interrupt_under_here_keeps_the_directory_empty() {
+    static RAISED: AtomicUsize = AtomicUsize::new(0);
+    let interrupt = Interrupt::on(&RAISED);
+    interrupt.raise();
+
+    let host = Host::new("create-here-interrupted").interrupted_by(interrupt);
+    let alpha = host.repository("alpha");
+    let here = host.empty_plane_dir("auth-work");
+
+    let created = host.create(here_request(&here, &[&alpha])).unwrap();
+
+    assert!(created.interrupted);
+    assert!(created.kept_directory);
+    assert!(here.is_dir());
+    assert_eq!(fs::read_dir(&here).unwrap().count(), 0);
 }
 
 #[test]
@@ -442,6 +653,7 @@ fn a_branch_suffix_beats_the_shared_branch_for_that_member_alone() {
             ],
             branch: Some("feat-login".to_owned()),
             id: None,
+            here: None,
             intent: BranchIntent::Resolve,
             run_scripts: true,
             fetch: true,
@@ -827,6 +1039,13 @@ fn error_plane_id(error: &EngineError) -> String {
     }
 }
 
+fn here_request(here: &Path, members: &[&Path]) -> PlaneCreateRequest {
+    PlaneCreateRequest {
+        here: Some(here.to_path_buf()),
+        ..request(members, "feat-login")
+    }
+}
+
 fn request(members: &[&Path], branch: &str) -> PlaneCreateRequest {
     PlaneCreateRequest {
         members: members
@@ -835,6 +1054,7 @@ fn request(members: &[&Path], branch: &str) -> PlaneCreateRequest {
             .collect(),
         branch: Some(branch.to_owned()),
         id: None,
+        here: None,
         intent: BranchIntent::Resolve,
         fetch: true,
         run_scripts: true,
@@ -893,6 +1113,14 @@ impl Host {
 
     fn planes(&self) -> PathBuf {
         self.directories.planes().to_path_buf()
+    }
+
+    /// An empty directory directly inside the planes directory, as a person
+    /// makes one before `bp create --here`.
+    fn empty_plane_dir(&self, name: &str) -> PathBuf {
+        let path = self.planes().join(name);
+        fs::create_dir_all(&path).unwrap();
+        path
     }
 
     fn planes_are_empty(&self) -> bool {

@@ -195,7 +195,10 @@ fn named(directories: &Directories, id: &str) -> Result<PathBuf, EngineError> {
 
     match (segments.next(), segments.next()) {
         (Some(Component::Normal(name)), None) => Ok(canonical(directories.planes()).join(name)),
-        _ => Err(EngineError::InvalidPlaneId { id: id.to_owned() }),
+        _ => Err(EngineError::InvalidPlaneId {
+            id: id.to_owned(),
+            from_directory: false,
+        }),
     }
 }
 

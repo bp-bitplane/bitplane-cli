@@ -167,7 +167,7 @@ fn plane_create() -> Vec<Case> {
         },
         Case {
             example: "Making the plane where you stand",
-            expectation: Expectation::NotBuilt(HERE_NOT_BUILT),
+            expectation: Expectation::Matches,
             build: |world| {
                 world.project_with(API, &["feat-login"]);
                 here(world, "auth-work");
@@ -175,7 +175,7 @@ fn plane_create() -> Vec<Case> {
         },
         Case {
             example: "The directory is not empty",
-            expectation: Expectation::NotBuilt(HERE_NOT_BUILT),
+            expectation: Expectation::Matches,
             build: |world| {
                 world.project_with(API, &["feat-login"]);
                 let plane = here(world, "auth-work");
@@ -209,7 +209,7 @@ fn plane_create() -> Vec<Case> {
         },
         Case {
             example: "A member fails partway through #2",
-            expectation: Expectation::NotBuilt(HERE_NOT_BUILT),
+            expectation: Expectation::Matches,
             build: |world| {
                 world.project_with(API, &["feat-login"]);
                 world.project_with(WEB, &["feat-login"]);
@@ -232,8 +232,6 @@ fn plane_create() -> Vec<Case> {
         },
     ]
 }
-
-const HERE_NOT_BUILT: &str = "bp create --here is documented ahead of the code";
 
 /// An empty directory directly inside the planes directory, stood in — what a
 /// person has done before typing `bp create --here`.

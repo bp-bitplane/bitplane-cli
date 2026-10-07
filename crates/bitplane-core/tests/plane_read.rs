@@ -748,6 +748,7 @@ impl Host {
                     .collect(),
                 branch: Some(branch.to_owned()),
                 id: id.map(ToOwned::to_owned),
+                here: None,
                 intent: BranchIntent::Resolve,
                 fetch: true,
                 run_scripts: true,
