@@ -22,6 +22,13 @@ Ticket: `.alfonz/issues/bitplane-architecture/issues/07-plane-lifecycle-partial-
 > check it already runs, with no new waiver, and skipped entirely for adopted
 > projects.
 
+> **Note: `bp create --here` keeps the directory on abort.** It makes the plane in a
+> directory that already exists, so step 1's claim is `mkdir .bitplane/` inside
+> it rather than `mkdir` of the plane directory, and the abort path **empties**
+> the directory instead of removing it: the user made it, not `bp`, and their
+> shell is sitting in it. Everything else — the latch, the window, the forced
+> unwind — is unchanged.
+
 ## Context
 
 Creating a plane across four repos is four `git worktree add` calls with no

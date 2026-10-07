@@ -33,7 +33,7 @@ The directory on a host under which plane directories are created. Exactly one p
 `.bitplane/` at its root is **reserved** for bitplane's own per-plane files (script logs, the lock sentinel, the incomplete marker). A project whose derived path would start with that segment is refused.
 
 **plane id**
-The identifier naming the plane directory, unique per host. **Mutable by design.** It defaults to a generated `bp-<hex8>`, may be supplied at `create`, and can be renamed afterwards — a wall of `bp-a3f9c2e1` directories is impossible to navigate, and renaming is the escape hatch.
+The identifier naming the plane directory, unique per host. **Mutable by design.** It defaults to a generated `bp-<hex8>`, may be supplied at `create` or taken from the current directory's name (`bp create --here`), and can be renamed afterwards — a wall of `bp-a3f9c2e1` directories is impossible to navigate, and renaming is the escape hatch.
 
 It is therefore **not safe to cache**: nothing outside bitplane may store a plane id and expect it to resolve later, and no alias to a former id is kept. A stale reference is simply an error.
 

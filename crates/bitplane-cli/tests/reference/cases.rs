@@ -166,6 +166,23 @@ fn plane_create() -> Vec<Case> {
             },
         },
         Case {
+            example: "Making the plane where you stand",
+            expectation: Expectation::NotBuilt(HERE_NOT_BUILT),
+            build: |world| {
+                world.project_with(API, &["feat-login"]);
+                here(world, "auth-work");
+            },
+        },
+        Case {
+            example: "The directory is not empty",
+            expectation: Expectation::NotBuilt(HERE_NOT_BUILT),
+            build: |world| {
+                world.project_with(API, &["feat-login"]);
+                let plane = here(world, "auth-work");
+                fs::write(plane.join("notes.md"), "mine\n").expect("write a file of the user's");
+            },
+        },
+        Case {
             example: "git is too old",
             expectation: Expectation::Matches,
             build: |world| {
@@ -191,6 +208,20 @@ fn plane_create() -> Vec<Case> {
             },
         },
         Case {
+            example: "A member fails partway through #2",
+            expectation: Expectation::NotBuilt(HERE_NOT_BUILT),
+            build: |world| {
+                world.project_with(API, &["feat-login"]);
+                world.project_with(WEB, &["feat-login"]);
+                world.project_with(DOCS, &["feat-login"]);
+                world.shim_git(
+                    "case \" $* \" in *acme/web*worktree*|*worktree*acme/web*) \
+                     echo 'fatal: invalid reference: feat-login' >&2; exit 128;; esac",
+                );
+                here(world, "auth-work");
+            },
+        },
+        Case {
             example: "Ctrl-C",
             expectation: Expectation::Unstageable(
                 "which member the first interrupt lands between is a race a \
@@ -200,6 +231,17 @@ fn plane_create() -> Vec<Case> {
             build: |_| {},
         },
     ]
+}
+
+const HERE_NOT_BUILT: &str = "bp create --here is documented ahead of the code";
+
+/// An empty directory directly inside the planes directory, stood in — what a
+/// person has done before typing `bp create --here`.
+fn here(world: &mut World, id: &str) -> std::path::PathBuf {
+    let plane = world.planes().join(id);
+    fs::create_dir_all(&plane).expect("make the directory to create the plane in");
+    world.cd(&plane);
+    plane
 }
 
 fn plane_destroy() -> Vec<Case> {

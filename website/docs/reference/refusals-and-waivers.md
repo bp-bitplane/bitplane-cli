@@ -299,6 +299,10 @@ exists. Re-running identically will never help.
 | `plane_id_in_use` | `auth-work is a claimed directory with no plane file` | `Run` `bp doctor` `to see what is in it, then remove the directory by hand.` |
 | `reserved_plane_id` | `bp- is reserved for generated plane ids` | `Choose an id that does not start with bp-.` |
 | `invalid_plane_id` | `Auth_Work is not a valid plane id` | `Use lowercase letters, digits and . _ - ; start with a letter or digit; 64 characters at most.` |
+| `reserved_plane_id` | `the directory bp-mine starts with bp-, which is reserved for generated plane ids` | `Rename the directory so it does not start with bp-.` |
+| `invalid_plane_id` | `the directory Auth_Work is not a valid plane id` | `Rename the directory using lowercase letters, digits and . _ - ; start with a letter or digit; 64 characters at most.` |
+| `not_in_planes_dir` | `/Users/alfonz/src/auth-work is not directly inside ~/planes` | `Run it from an empty directory directly inside ~/planes, or run bp create without --here.` |
+| `plane_dir_not_empty` | `~/planes/auth-work is not empty` | `--here needs an empty directory; empty it, or run bp create without --here.` |
 | `project_name_taken` | `acme/codestyle is already a project` | `acme/codestyle-2 is free; re-run with --name acme/codestyle-2.` |
 | `project_name_taken` | `acme/codestyle is already registered from that url` | *(none)* |
 | `project_name_nests` | `acme/codestyle would sit inside the project acme` | `Choose a name outside acme, or rename acme first.` |
@@ -339,6 +343,10 @@ carries the next free name, suffixed on the **last segment**.
 `project_name_nests` and `reserved_name_segment` are both about names a nested
 registry cannot hold. See
 [the unwaivable ones](#project_name_nests) for why nesting has no waiver.
+
+The second `reserved_plane_id` and `invalid_plane_id` rows are
+[`bp create --here`](./plane/create.md#here)'s: you did not type the id, the
+directory's name is it, so the message says so and the remedy is a rename.
 
 The three `plane_id_in_use` messages are three different things `bp` found at
 the path. `create` stats the one path it already knows and classifies it, so the

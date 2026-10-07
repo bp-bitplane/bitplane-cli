@@ -4,16 +4,19 @@ title: bp create
 
 # `bp create`
 
-:::implemented
+:::in-progress
 
-Everything on this page works as described.
+Everything on this page works as described, except:
+
+- **`--here` is not accepted.**
+- **`-c` is not accepted.**
 
 :::
 
 Create a plane and the worktrees of every member named on the command line.
 
 ```
-bp create <member>... [-b <branch>] [--id <id>] [--new-branch | --existing-branch]
+bp create <member>... [-b <branch>] [--id <id> | --here] [--new-branch | --existing-branch]
           [--no-fetch] [--no-scripts]
 ```
 
@@ -44,6 +47,7 @@ branch is cut from, not a branch to land on.
 | --- | --- | --- |
 | `-b`, `--branch <branch>` | — | The branch for every member that does not carry its own. Applied at this moment and **not remembered**: a plane has no branch. |
 | `--id <id>` | a generated `bp-<hex8>` | The plane id, which is also its directory name. |
+| `-c`, `--here` | — | Make the plane in the current directory, named after it. Cannot be combined with `--id`. |
 | `--new-branch` | — | The branch must not already exist. Fails if it does. |
 | `--existing-branch` | — | The branch must already exist. Fails if it does not. |
 | `--no-fetch` | fetch first | Skip the fetch of every owned project. |
@@ -83,6 +87,30 @@ Lowercase only, so two ids can never collide on a case-insensitive filesystem.
 
 Ids are **not safe to cache**. A plane can be renamed, no alias to a former id
 is kept, and a stale reference is simply an error.
+
+### Here
+
+`--here` makes the plane in the directory you are standing in, and the
+directory's name is the id. It is for the shell that has already done
+`mkdir ~/planes/auth-work && cd ~/planes/auth-work`. Every rule a chosen id
+obeys still applies, checked before anything is fetched or claimed:
+
+- The directory must sit **directly inside** the planes directory — not
+  anywhere below it. Both paths are compared after resolving symlinks. Otherwise
+  [`not_in_planes_dir`](../refusals-and-waivers.md#usage-failures).
+- Its name must be a valid chosen id, so a directory called `bp-…` is
+  [`reserved_plane_id`](../refusals-and-waivers.md#usage-failures) and one
+  called `Auth_Work` is
+  [`invalid_plane_id`](../refusals-and-waivers.md#usage-failures).
+- It must be **empty** — no exception for dotfiles. Otherwise
+  [`plane_dir_not_empty`](../refusals-and-waivers.md#usage-failures).
+
+The directory already exists, so it cannot be claimed by `mkdir`. The claim is
+an atomic `mkdir .bitplane/` inside it instead, which is what keeps two
+concurrent `--here` runs in one directory apart.
+
+**An abort empties the directory rather than removing it.** You made it, not
+`bp`, and your shell is sitting in it.
 
 ## Output
 
@@ -126,6 +154,32 @@ $ bp create @api -b feat-login --id auth-work
 error[plane_id_in_use]: auth-work exists but was never completed
 
 remedy: Nothing in it is yours; run bp destroy -p auth-work to clear it.
+```
+
+### Making the plane where you stand
+
+From inside an empty `~/planes/auth-work`:
+
+```
+$ bp create @api -b feat-login --here
+```
+```
+auth-work  ~/planes/auth-work
+
+  @api  feat-login  created  acme/api
+```
+
+### The directory is not empty
+
+Exit `2`, before anything is fetched or claimed.
+
+```
+$ bp create @api -b feat-login --here
+```
+```
+error[plane_dir_not_empty]: ~/planes/auth-work is not empty
+
+remedy: --here needs an empty directory; empty it, or run bp create without --here.
 ```
 
 ### git is too old
@@ -172,6 +226,19 @@ unwind passes git's force flag unconditionally, which is safe **only** here: by
 construction nothing in the abort window is yours yet. That force is scoped to
 this path and is never reused by [`bp destroy`](./destroy.md).
 
+Under `--here` the same failure keeps the directory, emptied:
+
+```
+$ bp create @api @web @docs -b feat-login --here
+```
+```
+error[create_aborted]: create did not finish; auth-work was emptied
+
+  @web  failed: git worktree add exited 128: fatal: invalid reference: feat-login
+
+remedy: Nothing was left behind. Fix what the rows report, then run bp create again.
+```
+
 ### Ctrl-C
 
 Exit `130`. The first interrupt stops scheduling, waits for the children already
@@ -209,7 +276,7 @@ remedy: See the log, fix the cause, then run bp run @api install.
 | --- | --- |
 | `0` | the plane was built |
 | `1` | the run aborted, or a `post_worktree_create` script failed |
-| `2` | bad arguments, a missing branch, a taken or reserved id, or a branch intent that cannot be honoured |
+| `2` | bad arguments, a missing branch, a taken or reserved id, a `--here` directory that is not empty or not directly inside the planes directory, or a branch intent that cannot be honoured |
 | `4` | git is missing, unusable or older than 2.36 |
 | `5` | a lock could not be taken in time |
 | `130` | interrupted |
@@ -218,7 +285,9 @@ remedy: See the log, fix the cause, then run bp run @api install.
 
 In this order, and the order is the design:
 
-1. `mkdir <plane-dir>` — the claim. Atomic; `EEXIST` is fatal.
+1. `mkdir <plane-dir>` — the claim. Atomic; `EEXIST` is fatal. Under
+   `--here` the directory already exists, so the claim is
+   `mkdir <plane-dir>/.bitplane/` instead.
 2. `.bitplane/incomplete` — the latch, written before anything else.
 3. `plane.toml` — the membership.
 4. one `git worktree add` per member — **the abort window**.
