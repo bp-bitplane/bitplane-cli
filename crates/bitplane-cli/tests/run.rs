@@ -144,6 +144,42 @@ fn the_sigil_is_optional_in_the_one_slot_that_takes_no_path() {
     );
 }
 
+#[test]
+fn a_namespaced_project_runs_its_scripts_and_logs_them_side_by_side() {
+    let host = Host::new("cli-run-namespaced");
+    host.project_named("api", "acme/api");
+    host.declares(
+        "acme/api",
+        "[scripts.install]\nshell = \"echo installing\"\npost_worktree_create = true\n",
+    );
+
+    let create = host.bp(&[
+        "create",
+        "@acme/api",
+        "-b",
+        "feat-login",
+        "--id",
+        "auth-work",
+    ]);
+    assert_eq!(create.status.code(), Some(0), "stderr: {}", stderr(&create));
+    let run = host.bp(&["run", "@acme/api", "install"]);
+    assert_eq!(run.status.code(), Some(0), "stderr: {}", stderr(&run));
+
+    let logs: Vec<String> = fs::read_dir(host.planes().join("auth-work/.bitplane/logs"))
+        .expect("the plane has a log directory")
+        .map(|entry| {
+            let entry = entry.expect("read a log entry");
+            assert!(entry.file_type().unwrap().is_file(), "logs stay flat");
+            entry.file_name().into_string().unwrap()
+        })
+        .collect();
+    assert!(
+        logs.iter()
+            .all(|log| log.ends_with("-acme+api-install.log")),
+        "got {logs:?}"
+    );
+}
+
 // ---------------------------------------------------------------- fixtures --
 
 /// A host of its own, holding one project and one plane called `auth-work`.
@@ -165,6 +201,24 @@ impl Host {
         repository_with_one_commit(&forge);
 
         let run = self.bp(&["project", "add", &forge.display().to_string()]);
+        assert!(
+            run.status.success(),
+            "the fixture project was not registered: {}",
+            stderr(&run)
+        );
+    }
+
+    fn project_named(&self, forge: &str, name: &str) {
+        let forge = self.root.join("forges").join(forge);
+        repository_with_one_commit(&forge);
+
+        let run = self.bp(&[
+            "project",
+            "add",
+            &forge.display().to_string(),
+            "--name",
+            name,
+        ]);
         assert!(
             run.status.success(),
             "the fixture project was not registered: {}",

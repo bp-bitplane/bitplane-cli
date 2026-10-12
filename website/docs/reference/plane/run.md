@@ -74,7 +74,9 @@ at the first non-zero exit.
 
 stdout and stderr are **merged and streamed live to `bp`'s stderr**, and tee'd
 to a log at
-`<plane-dir>/.bitplane/logs/<YYYYMMDDTHHMMSSZ>-<project>-<script>.log`.
+`<plane-dir>/.bitplane/logs/<YYYYMMDDTHHMMSSZ>-<project>-<script>.log`. A
+nested project name's `/` becomes `+`, so `@acme/api` logs to
+`…-acme+api-install.log` and the directory stays flat.
 
 Merged onto **stderr**, never stdout: stdout is the machine contract, and a
 `pnpm` banner inside the JSON is a broken contract.

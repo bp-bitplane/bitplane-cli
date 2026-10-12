@@ -469,18 +469,25 @@ fn tee(mut reader: io::PipeReader, log: &mut File, sink: &dyn Fn(&[u8])) -> io::
 
 /// `<plane-dir>/.bitplane/logs/<YYYYMMDDTHHMMSSZ>-<project>-<script>.log`.
 ///
-/// A compact timestamp because RFC 3339's colons are hostile in filenames. Both
-/// names are checked against the plane-id character set before they get here,
-/// so neither can reach out of the directory.
+/// A compact timestamp because RFC 3339's colons are hostile in filenames.
 fn log_path(site: &Site, script: &ScriptName) -> Result<PathBuf, EngineError> {
     let directory = site.plane_directory.join(BITPLANE_DIR).join(LOGS_DIR);
     fs::create_dir_all(&directory).map_err(|err| EngineError::io(&directory, err))?;
 
-    Ok(directory.join(format!(
-        "{}-{}-{script}.log",
-        Rfc3339::now().compact(),
-        site.project,
+    Ok(directory.join(log_file_name(
+        &Rfc3339::now().compact(),
+        &site.project,
+        script,
     )))
+}
+
+/// A nested project name's `/` becomes `+`, which no segment may contain, so
+/// the directory stays flat and two names never share a file.
+fn log_file_name(stamp: &str, project: &ProjectName, script: &ScriptName) -> String {
+    format!(
+        "{stamp}-{}-{script}.log",
+        project.as_str().replace('/', "+")
+    )
 }
 
 /// Where one member's scripts would run, and what it declares.
@@ -630,6 +637,19 @@ mod tests {
                 "{name} must never reach a path"
             );
         }
+    }
+
+    #[test]
+    fn a_nested_project_name_flattens_into_a_log_name_no_other_name_shares() {
+        let name = |project: &str| {
+            let project = ProjectName::parse(project).expect("a project name");
+            let script = ScriptName::parse("install").expect("a script name");
+            log_file_name("20261012T184907Z", &project, &script)
+        };
+
+        assert_eq!(name("acme/api"), "20261012T184907Z-acme+api-install.log");
+        assert_ne!(name("a/b-c"), name("a-b/c"));
+        assert_ne!(name("a/b"), name("a.b"));
     }
 
     #[test]
