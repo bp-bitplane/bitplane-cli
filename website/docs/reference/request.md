@@ -4,9 +4,9 @@ title: bp request
 
 # `bp request`
 
-:::not-implemented
+:::implemented
 
-Nothing on this page works yet.
+Everything on this page works as described.
 
 :::
 
@@ -49,7 +49,7 @@ touched:
 $ echo '{"action":"plane_show"}' | bp request
 ```
 ```
-error[malformed_request]: stdin is not a request: missing field `plane` at line 1 column 24
+error[malformed_request]: stdin is not a request: missing field `plane`
 
 remedy: Send exactly one request, as JSON, on stdin.
 ```

@@ -8,12 +8,12 @@ mod interrupt;
 mod render;
 
 use std::ffi::OsString;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use bitplane_core::{
-    BranchIntent, Directories, DirectoryOverrides, EngineError, ErrorEnvelope, HealthCheck,
-    Interrupt, LocalEngine, PlaneAddRequest, PlaneCreateRequest, PlaneDestroyRequest,
+    BranchIntent, CONTRACT_VERSION, Directories, DirectoryOverrides, EngineError, ErrorEnvelope,
+    HealthCheck, Interrupt, LocalEngine, PlaneAddRequest, PlaneCreateRequest, PlaneDestroyRequest,
     PlaneListRequest, PlaneRef, PlaneRemoveRequest, PlaneScriptsRequest, PlaneShowRequest,
     PlaneStatusRequest, ProjectAddRequest, ProjectFetchRequest, ProjectName, Reason, Request,
     Response, SystemEnvironment, Termination, dispatch,
@@ -88,6 +88,9 @@ enum Command {
     /// Manage the projects registered on this host.
     #[command(subcommand)]
     Project(ProjectCommand),
+
+    /// Run one request, read as JSON from stdin.
+    Request,
 }
 
 /// The project verbs. Prefixed with `project`, where a plane verb is bare.
@@ -400,7 +403,17 @@ fn execute(cli: Cli, rendering: Rendering) -> Invocation {
         return failed(no_command(), rendering);
     };
 
-    match answer(command, &cli.global) {
+    let request = match command {
+        // Read before anything else is checked: input that is not a request is
+        // a usage failure, as a command line clap would not parse is.
+        Command::Request => match request_from(std::io::stdin().lock()) {
+            Ok(request) => Ok(request),
+            Err(envelope) => return failed(envelope, rendering),
+        },
+        command => request_for(command),
+    };
+
+    match answer(request, &cli.global) {
         Ok(response) => {
             // Results and a failure are not alternatives: a fan-out whose rows
             // are the result can still report that it did not fully succeed,
@@ -420,7 +433,10 @@ fn execute(cli: Cli, rendering: Rendering) -> Invocation {
     }
 }
 
-fn answer(command: Command, global: &GlobalFlags) -> Result<Response, EngineError> {
+fn answer(
+    request: Result<Request, EngineError>,
+    global: &GlobalFlags,
+) -> Result<Response, EngineError> {
     let directories = Directories::resolve(
         &DirectoryOverrides {
             planes_dir: global.planes_dir.clone(),
@@ -448,7 +464,7 @@ fn answer(command: Command, global: &GlobalFlags) -> Result<Response, EngineErro
     // git is checked once, before any command touches anything (ADR-0001).
     engine.ensure_git_supported()?;
 
-    dispatch(&engine, request_for(command)?)
+    dispatch(&engine, request?)
 }
 
 /// A response that reported an interrupt or a finding still goes to stdout —
@@ -477,6 +493,13 @@ fn render_parse_outcome(error: clap::Error, rendering: Rendering) -> Invocation 
     use clap::error::ErrorKind;
 
     match error.kind() {
+        // The one thing `--json` changes about `--version`: a program reading
+        // it also needs the contract this build speaks.
+        ErrorKind::DisplayVersion if rendering == Rendering::Json => Invocation {
+            stdout: version_json(),
+            stderr: String::new(),
+            termination: Termination::Ok,
+        },
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
             // clap's own writer: help and version go to stdout, styled or not
             // according to the terminal.
@@ -516,6 +539,30 @@ fn failed(envelope: ErrorEnvelope, rendering: Rendering) -> Invocation {
 fn no_command() -> ErrorEnvelope {
     ErrorEnvelope::usage("no_command", "no command given")
         .with_remedy("Run `bp --help` to see what bp can do.")
+}
+
+/// `bp --version --json`: the build, and the contract it speaks, on one line.
+fn version_json() -> String {
+    format!(
+        "{{\"name\":\"bp\",\"version\":{},\"contract\":{CONTRACT_VERSION}}}\n",
+        serde_json::Value::from(env!("CARGO_PKG_VERSION"))
+    )
+}
+
+/// `bp request`: exactly one request, as JSON, and nothing after it.
+fn request_from(mut input: impl Read) -> Result<Request, ErrorEnvelope> {
+    let mut text = String::new();
+    input
+        .read_to_string(&mut text)
+        .map_err(|err| err.to_string())
+        .and_then(|_| serde_json::from_str(&text).map_err(|err| err.to_string()))
+        .map_err(|why| {
+            ErrorEnvelope::usage(
+                "malformed_request",
+                format!("stdin is not a request: {why}"),
+            )
+            .with_remedy("Send exactly one request, as JSON, on stdin.")
+        })
 }
 
 /// Turns a parsed subcommand into the request that crosses the wire. The
@@ -577,6 +624,7 @@ fn request_for(command: Command) -> Result<Request, EngineError> {
             // here, so there is nothing for it to disambiguate.
             projects: vec![project_name(&args.project)?],
         }),
+        Command::Request => unreachable!("`bp request` reads its request from stdin"),
     })
 }
 
