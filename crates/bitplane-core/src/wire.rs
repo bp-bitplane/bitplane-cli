@@ -22,6 +22,14 @@ use crate::plane_id::PlaneId;
 use crate::project_file::ProjectSource;
 use crate::refusal::Reason;
 
+/// Which revision of [`Request`] and [`Response`] this build speaks.
+///
+/// A whole number, bumped whenever a request or response changes shape in a
+/// way an older client would misread — and only then, so a client can compare
+/// it before sending anything. `bp --version --json` reports it, and
+/// bitplane-sessiond carries it in `hello`.
+pub const CONTRACT_VERSION: u32 = 1;
+
 /// One user intent.
 ///
 /// Deliberately **not** `#[non_exhaustive]`: every surface is supposed to match
