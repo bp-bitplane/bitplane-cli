@@ -30,6 +30,7 @@ use crate::plane_id::PlaneId;
 
 /// How hard a read looks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum HealthCheck {
@@ -45,6 +46,7 @@ pub enum HealthCheck {
 
 /// What a read found about one plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneHealth {
     /// The tier this was computed at, so a caller can tell "nothing found" from
     /// "nothing looked for".
@@ -56,6 +58,7 @@ pub struct PlaneHealth {
 
 /// One thing a read found wrong.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "finding", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Finding {

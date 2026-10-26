@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 use bitplane_core::testing::{repository_with_one_commit, scratch_dir};
-use bitplane_core::{MemberRef, ProgressEvent, Step, StepState};
+use bitplane_core::{MemberProgress, MemberRef, ProgressEvent, Step, StepState};
 
 #[test]
 fn every_member_reports_its_steps_as_json_lines_on_the_descriptor() {
@@ -262,11 +262,11 @@ fn steps_of(events: &[ProgressEvent], member: &str) -> Vec<(&'static str, StepSt
     events
         .iter()
         .filter_map(|event| match event {
-            ProgressEvent::Member {
+            ProgressEvent::Member(MemberProgress {
                 member,
                 step,
                 state,
-            } if *member == wanted => Some((
+            }) if *member == wanted => Some((
                 match step {
                     Step::Fetch => "fetch",
                     Step::Worktree => "worktree",

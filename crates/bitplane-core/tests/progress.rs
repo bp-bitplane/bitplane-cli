@@ -14,8 +14,9 @@ use std::time::{Duration, Instant};
 use bitplane_core::lock::{self, Lock};
 use bitplane_core::testing::{repository_with_one_commit, scratch_dir};
 use bitplane_core::{
-    BranchIntent, Directories, Engine, EngineError, LocalEngine, MemberRef, PlaneAddRequest,
-    PlaneCreateRequest, PlaneRef, ProgressEvent, ProjectAddRequest, Step, StepState,
+    BranchIntent, Directories, Engine, EngineError, LocalEngine, MemberProgress, MemberRef,
+    PlaneAddRequest, PlaneCreateRequest, PlaneRef, ProgressEvent, ProjectAddRequest, Step,
+    StepState,
 };
 
 #[test]
@@ -310,11 +311,11 @@ impl Host {
         self.events()
             .into_iter()
             .filter_map(|event| match event {
-                ProgressEvent::Member {
+                ProgressEvent::Member(MemberProgress {
                     member,
                     step,
                     state,
-                } if member == wanted => Some((step, state)),
+                }) if member == wanted => Some((step, state)),
                 _ => None,
             })
             .collect()

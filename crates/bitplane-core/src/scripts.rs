@@ -62,6 +62,8 @@ const SHELL: &str = "/bin/sh";
 /// A script's name: the same character set as a plane id, so a user-chosen name
 /// is never trusted into a path.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+#[cfg_attr(feature = "ts", specta(type = String))]
 #[serde(into = "String", try_from = "String")]
 pub struct ScriptName(String);
 
@@ -72,6 +74,7 @@ pub struct ScriptName(String);
 /// `add`, and `pre_worktree_remove` on both `destroy` and `rm`. Both are the
 /// identical situation seen twice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum ScriptPoint {
@@ -89,6 +92,7 @@ pub enum ScriptPoint {
 /// rejected deliberately: a list of strings reads like argv and would mean
 /// shell.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptCommand {
     Argv(Vec<String>),
@@ -97,6 +101,7 @@ pub enum ScriptCommand {
 
 /// One `[scripts.<name>]` table, as the file holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct Script {
     pub name: ScriptName,
     #[serde(flatten)]
@@ -333,14 +338,14 @@ fn run_one(
         .map_err(|err| EngineError::io(&log, err))?;
     let started = Instant::now();
     let report = |state| {
-        (context.progress)(&ProgressEvent::Member {
-            member: MemberRef::Project(site.project.clone()),
-            step: Step::Script {
+        (context.progress)(&ProgressEvent::member(
+            MemberRef::Project(site.project.clone()),
+            Step::Script {
                 name: script.name.to_string(),
                 log: log.clone(),
             },
             state,
-        })
+        ))
     };
     report(StepState::Started);
 

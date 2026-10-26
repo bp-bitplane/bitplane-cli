@@ -141,11 +141,11 @@ fn fetch_all(
                         Outcome::Skipped(SkipReason::Interrupted)
                     } else {
                         let report = |state| {
-                            (context.on_progress)(&ProgressEvent::Member {
-                                member: MemberRef::Project(project.name().clone()),
-                                step: Step::Fetch,
+                            (context.on_progress)(&ProgressEvent::member(
+                                MemberRef::Project(project.name().clone()),
+                                Step::Fetch,
                                 state,
-                            })
+                            ))
                         };
                         report(StepState::Started);
 

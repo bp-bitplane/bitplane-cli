@@ -36,6 +36,7 @@ pub const CONTRACT_VERSION: u32 = 1;
 /// it exhaustively, so that an action added here and forgotten at a rendering
 /// fails to compile — the same property [`dispatch`] has.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Request {
     /// Make a plane, and a worktree of every member named.
@@ -65,6 +66,7 @@ pub enum Request {
 /// One answer. Never a scalar count: a fan-out answers with a vector of keyed
 /// per-item outcomes, so a progress stream is later that vector arriving early.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Response {
     PlaneCreate(PlaneCreated),
@@ -117,6 +119,7 @@ impl Response {
 /// filesystem, and the engine is the side that has one — the same reason
 /// ADR-0003 puts plane discovery there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneCreateRequest {
     /// One or more members, as written: `@name`, or a path, each optionally
     /// carrying `:branch`.
@@ -149,6 +152,7 @@ pub struct PlaneCreateRequest {
 /// members full of work — so a failure force-removes only the worktrees **it**
 /// created and drops only **its own** entries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneAddRequest {
     pub plane: PlaneRef,
     /// One or more members, as written: `@name`, or a path, each optionally
@@ -171,6 +175,7 @@ pub struct PlaneAddRequest {
 /// An intent flag rather than a lookup round trip: the ambiguity costs one
 /// field instead of a "does this branch exist?" call (ADR-0003).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum BranchIntent {
@@ -185,6 +190,7 @@ pub enum BranchIntent {
 
 /// A plane that was made.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneCreated {
     pub id: PlaneId,
     pub directory: PathBuf,
@@ -216,6 +222,7 @@ pub struct PlaneCreated {
 /// nothing in it is yours*, and a plane full of real work flagged as free to
 /// discard would be a trapdoor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneAdded {
     /// The **directory's name**, which is the plane's identity — a string for
     /// the same reason [`PlaneView`]'s is.
@@ -235,6 +242,7 @@ pub struct PlaneAdded {
 
 /// One member's worktree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct CreatedMember {
     /// The branch the worktree is on.
     pub branch: String,
@@ -254,6 +262,7 @@ pub struct CreatedMember {
 /// two round trips, which is the precise failure mode coarse granularity exists
 /// to prevent (ADR-0003). The walk therefore runs in the engine.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "plane", rename_all = "snake_case")]
 pub enum PlaneRef {
     /// Named outright, with `-p`.
@@ -265,12 +274,14 @@ pub enum PlaneRef {
 
 /// Every plane on this host.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneListRequest {
     pub health: HealthCheck,
 }
 
 /// One plane, in detail.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneShowRequest {
     pub plane: PlaneRef,
     pub health: HealthCheck,
@@ -278,18 +289,21 @@ pub struct PlaneShowRequest {
 
 /// What git says about every member of one plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneStatusRequest {
     pub plane: PlaneRef,
 }
 
 /// The planes, in directory-name order.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneList {
     pub planes: Vec<PlaneView>,
 }
 
 /// One plane, as a read describes it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneView {
     /// The **directory's name**, which is the plane's identity — held as a
     /// string rather than a [`PlaneId`] because a directory a user made by hand
@@ -308,6 +322,7 @@ pub struct PlaneView {
 
 /// One member, and the branch its worktree is on right now.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct MemberView {
     pub member: MemberRef,
     pub path: WorktreePath,
@@ -319,6 +334,7 @@ pub struct MemberView {
 /// git's own answer about every member of one plane, rendered and stored
 /// nowhere — which is what makes it unable to go stale (ADR-0006).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneStatus {
     pub id: String,
     pub directory: PathBuf,
@@ -329,6 +345,7 @@ pub struct PlaneStatus {
 
 /// One member's row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct MemberStatus {
     pub member: MemberRef,
     pub path: WorktreePath,
@@ -342,19 +359,23 @@ pub struct MemberStatus {
 /// not: every surface renders it, so a state added here and forgotten at a
 /// rendering has to fail to compile.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "work", rename_all = "snake_case")]
 pub enum MemberWork {
     /// git answered. **None of these three is drift**: a worktree's contents
     /// and its `HEAD` are the user's, and this is reported at exit `0`.
     Reported {
         /// Tracked files with changes, staged or not.
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         modified: usize,
         /// Files git does not know about.
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         untracked: usize,
         /// Commits on this branch contained in no `refs/remotes/origin/*`.
         /// Never `git branch -d`'s upstream comparison, which reports a branch
         /// already safe on the forge as unmerged (ADR-0006). No fetch is
         /// performed, so a stale tracking ref can only make this too large.
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         ahead: usize,
     },
     /// There is nothing at the member's path to ask about.
@@ -371,6 +392,7 @@ pub enum MemberWork {
 /// and being re-run with `--name <suggestion>` is **two** requests, because the
 /// caller supplied new information in between (ADR-0003).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ProjectAddRequest {
     /// Anything git can fetch from. bitplane speaks the git protocol and no
     /// forge API, and never reads, stores, prompts for or forwards a
@@ -382,6 +404,7 @@ pub struct ProjectAddRequest {
 
 /// Bring owned projects up to date.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ProjectFetchRequest {
     /// Which projects, as `@name` or `name`. **Empty takes every registered
     /// project in turn.**
@@ -390,6 +413,7 @@ pub struct ProjectFetchRequest {
 
 /// A project that was registered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ProjectAdded {
     pub name: ProjectName,
     pub source: ProjectSource,
@@ -404,12 +428,14 @@ pub struct ProjectAdded {
 
 /// Every project on this host, one row each.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ProjectListing {
     pub projects: Vec<PerProject<ProjectSummary>>,
 }
 
 /// One project, as a listing sees it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ProjectSummary {
     pub source: ProjectSource,
     /// Whether the source repo is on this host. One `stat`, never a stored
@@ -419,6 +445,7 @@ pub struct ProjectSummary {
 
 /// What a fetch did, project by project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ProjectFetched {
     pub projects: Vec<PerProject<Fetched>>,
     /// Whether Ctrl-C stopped the run. The remaining rows are then `skipped`.
@@ -427,9 +454,11 @@ pub struct ProjectFetched {
 
 /// One project's fetch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct Fetched {
     /// How many `refs/remotes/origin/*` this fetch added, moved or pruned.
     /// Zero is "up to date".
+    #[cfg_attr(feature = "ts", specta(type = u32))]
     pub updated: usize,
 }
 
@@ -492,6 +521,7 @@ impl ProjectFetched {
 
 /// Take a whole plane apart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneDestroyRequest {
     pub plane: PlaneRef,
     /// The reasons this invocation accepts losing work over. Granted per reason
@@ -508,6 +538,7 @@ pub struct PlaneDestroyRequest {
 
 /// Take named members out of a plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneRemoveRequest {
     pub plane: PlaneRef,
     /// The members, as written: `@name`, or a path. No branch suffix — a member
@@ -527,6 +558,7 @@ pub struct PlaneRemoveRequest {
 /// logs, and *"a read never writes"* is supposed to be checkable by reading the
 /// trait (ADR-0003).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneScriptsRequest {
     pub plane: PlaneRef,
     /// The script names, run in **request order**: unlike a lifecycle point,
@@ -539,6 +571,7 @@ pub struct PlaneScriptsRequest {
 
 /// What a script run did, script by script.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ScriptsRun {
     pub id: String,
     pub directory: PathBuf,
@@ -552,6 +585,7 @@ pub struct ScriptsRun {
 /// record at all: "started but never finished" is unrepresentable, and Ctrl-C
 /// is the escape (ADR-0004).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ScriptOutcome {
     /// The script's own name, which every script has by construction.
     pub name: String,
@@ -563,6 +597,7 @@ pub struct ScriptOutcome {
     pub log: PathBuf,
     /// RFC 3339, in UTC.
     pub finished_at: String,
+    #[cfg_attr(feature = "ts", specta(type = u32))]
     pub duration_ms: u64,
     /// Flattened, so a row is one flat object on the wire — the same shape
     /// [`PerMember`] gives an outcome.
@@ -575,6 +610,7 @@ pub struct ScriptOutcome {
 /// Deliberately **not** `#[non_exhaustive]`, for the same reason [`MemberWork`]
 /// is not: every surface renders it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum ScriptResult {
     /// It exited zero.
@@ -614,6 +650,7 @@ impl ScriptOutcome {
 
 /// A plane that was taken apart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneDestroyed {
     /// The **directory's name**, which is the plane's identity — a string for
     /// the same reason [`PlaneView`]'s is: a directory a user made by hand need
@@ -636,6 +673,7 @@ pub struct PlaneDestroyed {
 
 /// Members that were taken out of a plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PlaneRemoved {
     pub id: String,
     pub directory: PathBuf,
@@ -648,6 +686,7 @@ pub struct PlaneRemoved {
 
 /// One member's worktree, gone.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct RemovedMember {
     /// The branch the worktree was on, absent where it was detached or where
     /// the source repo could not be asked.
@@ -671,6 +710,7 @@ pub struct RemovedMember {
 /// is not: every surface renders it, so a state added here and forgotten at a
 /// rendering has to fail to compile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum BranchDisposition {
     /// Deleted with the worktree. Only ever an **owned** project's branch: for
@@ -694,24 +734,45 @@ pub enum BranchDisposition {
 /// and stderr stays the human stream. There is **no final event** — the
 /// response, or the envelope, is the end.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum ProgressEvent {
-    /// One member moved through one step. A partial row, keyed the way the
-    /// member's row in the response will be.
-    Member {
-        member: MemberRef,
-        /// Flattened, so a script's name and log sit beside `step` on the
-        /// wire rather than inside it.
-        #[serde(flatten)]
-        step: Step,
-        state: StepState,
-    },
+    /// One member moved through one step.
+    ///
+    /// A struct of its own rather than inline fields, so the flattened step
+    /// survives into generated TypeScript: a flattened field inside an enum
+    /// variant does not. The bytes are the same either way.
+    Member(MemberProgress),
     /// A lock is contended, and the run is waiting for it.
     Waiting { object: PathBuf },
 }
 
+impl ProgressEvent {
+    /// `member` moved through `step`, and got as far as `state`.
+    pub fn member(member: MemberRef, step: Step, state: StepState) -> ProgressEvent {
+        ProgressEvent::Member(MemberProgress {
+            member,
+            step,
+            state,
+        })
+    }
+}
+
+/// A partial row, keyed the way the member's row in the response will be.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+pub struct MemberProgress {
+    pub member: MemberRef,
+    /// Flattened, so a script's name and log sit beside `step` on the wire
+    /// rather than inside it.
+    #[serde(flatten)]
+    pub step: Step,
+    pub state: StepState,
+}
+
 /// Where a member is in `create`, in the order it gets there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "step", rename_all = "snake_case")]
 pub enum Step {
     /// Bringing the project's source repo up to date.
@@ -724,6 +785,7 @@ pub enum Step {
 
 /// How far a step has got.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum StepState {
     Started,
@@ -789,14 +851,14 @@ mod tests {
 
     #[test]
     fn a_progress_event_is_one_flat_object_on_the_wire() {
-        let event = ProgressEvent::Member {
-            member: MemberRef::parse("@api").unwrap(),
-            step: Step::Script {
+        let event = ProgressEvent::member(
+            MemberRef::parse("@api").unwrap(),
+            Step::Script {
                 name: "install".to_owned(),
                 log: PathBuf::from("/planes/auth-work/.bitplane/logs/install.log"),
             },
-            state: StepState::Started,
-        };
+            StepState::Started,
+        );
 
         let json = serde_json::to_string(&event).unwrap();
 

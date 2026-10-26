@@ -28,8 +28,9 @@ printed.
 stdin holds **one** request: a single JSON value whose `action` names what to
 do, and whose other fields are that action's arguments. It is the serialisation
 of the core `Request` type — the same value `bp` builds from a command line —
-so this page does not repeat its fields. The generated TypeScript contract is
-the place to read them.
+so this page does not repeat its fields. The generated TypeScript contract,
+[`bp-contract.ts`](https://github.com/bp-bitplane/bitplane-cli/blob/main/crates/bitplane-core/bp-contract.ts),
+is the place to read them.
 
 ```sh
 $ echo '{"action":"plane_list","health":"cheap"}' | bp request --json

@@ -13,6 +13,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// bitplane's. It never appears in an error envelope: an interrupted run prints
 /// the rows it has on stdout (ADR-0004), so there is no failure to report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+#[cfg_attr(feature = "ts", specta(type = u8))]
 #[repr(u8)]
 pub enum ExitCode {
     /// The command did what was asked.

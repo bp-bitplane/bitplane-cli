@@ -67,11 +67,11 @@ pub fn build(
                         Outcome::Skipped(SkipReason::AbortedAfterEarlierFailure)
                     } else {
                         let report = |state| {
-                            progress(&ProgressEvent::Member {
-                                member: member.reference.clone(),
-                                step: Step::Worktree,
+                            progress(&ProgressEvent::member(
+                                member.reference.clone(),
+                                Step::Worktree,
                                 state,
-                            })
+                            ))
                         };
                         report(StepState::Started);
 
