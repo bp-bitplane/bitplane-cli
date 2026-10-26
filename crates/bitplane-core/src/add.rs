@@ -39,6 +39,7 @@ use crate::outcome::{Outcome, PerMember};
 use crate::plan::{self, PlanContext, PlannedMember};
 use crate::plane_dir::OpenPlane;
 use crate::plane_file::{self, Member, PlaneFile};
+use crate::progress;
 use crate::project_fetch::{self, FetchContext};
 use crate::read;
 use crate::repo::Git;
@@ -92,7 +93,13 @@ pub fn plane_add(
 
     plane_file_with(&plane, &entries(&planned))?;
 
-    let members = worktrees::build(&planned, plane.path(), context.git, context.interrupt);
+    let members = worktrees::build(
+        &planned,
+        plane.path(),
+        context.git,
+        context.interrupt,
+        &progress::silent,
+    );
     let interrupted = context.interrupt.is_raised();
 
     if interrupted || members.iter().any(PerMember::is_failure) {
@@ -238,6 +245,7 @@ fn fetch_first(projects: &[String], context: &AddContext<'_>) -> Result<(), Engi
             git: context.git,
             interrupt: context.interrupt,
             on_lock_wait: context.on_lock_wait,
+            on_progress: &progress::silent,
         },
     )?;
 
@@ -357,6 +365,7 @@ impl AddContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.on_script_output,
+            progress: &progress::silent,
         }
     }
 }

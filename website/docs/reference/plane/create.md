@@ -4,11 +4,9 @@ title: bp create
 
 # `bp create`
 
-:::in-progress
+:::implemented
 
-Everything on this page works as described, except:
-
-- **`--progress-fd` is not accepted.**
+Everything on this page works as described.
 
 :::
 
@@ -144,8 +142,10 @@ $ bp create @api @web -b feat-login --json --progress-fd 3 3>progress.jsonl
 | `object` | the lock being waited for, on `waiting` only |
 
 A member's steps arrive in order; different members' interleave, because they
-run in parallel. A member with nothing to fetch still gets its fetch step, and
-one with no scripts gets none. A contended lock is
+run in parallel. Only an owned project is fetched, so an adopted project, an
+ad-hoc member, or any member under `--no-fetch` starts at `worktree`; a member
+with no scripts reports none, and a member skipped after an earlier failure
+reports nothing at all. A contended lock is
 `{"event":"waiting","object":"<path>"}`, alongside the `waiting for …` line
 stderr already carries.
 
@@ -153,8 +153,9 @@ stderr already carries.
 the result on stdout say how it went. **stdout and stderr are exactly what they
 are without the flag**, script output included.
 
-The descriptor must be open for writing, and may not be `0`, `1` or `2`;
-anything else is
+The descriptor must be open for writing, and may not be `0`, `1` or `2` —
+progress on stdout or stderr would change the bytes they carry. Anything else
+is
 [`bad_progress_fd`](../refusals-and-waivers.md#usage-failures), exit `2`, before
 anything is fetched or created. Once the run has started, a write that fails —
 the reader went away — is dropped and the run carries on.

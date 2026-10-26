@@ -48,9 +48,10 @@ use crate::member::{MemberRef, PROJECT_SIGIL, ProjectName};
 use crate::plane_dir::BITPLANE_DIR;
 use crate::plane_file::Member;
 use crate::plane_id::is_well_formed_id;
+use crate::progress::ProgressSink;
 use crate::project_dir::{self, BIN_DIR_NAME, ProjectDirectory};
 use crate::time::Rfc3339;
-use crate::wire::{ScriptOutcome, ScriptResult};
+use crate::wire::{ProgressEvent, ScriptOutcome, ScriptResult, Step, StepState};
 
 /// Where a plane keeps its script logs, under its reserved directory.
 pub const LOGS_DIR: &str = "logs";
@@ -122,6 +123,8 @@ pub struct ScriptContext<'a> {
     /// [`crate::LocalEngine`]'s lock announcement is one: the engine does not
     /// own a terminal, and a surface that wants the bytes says so.
     pub output: &'a (dyn Fn(&[u8]) + Sync),
+    /// Told as each script starts and ends. Only `create` listens (ADR-0010).
+    pub progress: &'a ProgressSink,
 }
 
 /// Whether a pass stops at the first script that fails.
@@ -329,6 +332,17 @@ fn run_one(
         .open(&log)
         .map_err(|err| EngineError::io(&log, err))?;
     let started = Instant::now();
+    let report = |state| {
+        (context.progress)(&ProgressEvent::Member {
+            member: MemberRef::Project(site.project.clone()),
+            step: Step::Script {
+                name: script.name.to_string(),
+                log: log.clone(),
+            },
+            state,
+        })
+    };
+    report(StepState::Started);
 
     let result = match spawn(site, script, &mut file, context) {
         Ok(result) => result,
@@ -342,6 +356,11 @@ fn run_one(
             }
         }
     };
+
+    report(match &result {
+        ScriptResult::Ok => StepState::Done,
+        ScriptResult::Failed { .. } => StepState::Failed,
+    });
 
     Ok(ScriptOutcome {
         name: script.name.to_string(),

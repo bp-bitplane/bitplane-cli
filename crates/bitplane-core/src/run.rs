@@ -26,6 +26,7 @@ use crate::directories::Directories;
 use crate::error::EngineError;
 use crate::interrupt::Interrupt;
 use crate::plane_dir::OpenPlane;
+use crate::progress;
 use crate::read;
 use crate::scripts::{self, InPlane, ScriptContext, ScriptName};
 use crate::wire::{PlaneScriptsRequest, ScriptsRun};
@@ -124,6 +125,7 @@ impl RunContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.output,
+            progress: &progress::silent,
         }
     }
 }

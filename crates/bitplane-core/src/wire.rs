@@ -687,6 +687,50 @@ pub enum BranchDisposition {
     None,
 }
 
+/// One thing a running `create` did, reported before the response exists
+/// (ADR-0010).
+///
+/// Written to the progress fd and nowhere else: stdout keeps its one result
+/// and stderr stays the human stream. There is **no final event** — the
+/// response, or the envelope, is the end.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum ProgressEvent {
+    /// One member moved through one step. A partial row, keyed the way the
+    /// member's row in the response will be.
+    Member {
+        member: MemberRef,
+        /// Flattened, so a script's name and log sit beside `step` on the
+        /// wire rather than inside it.
+        #[serde(flatten)]
+        step: Step,
+        state: StepState,
+    },
+    /// A lock is contended, and the run is waiting for it.
+    Waiting { object: PathBuf },
+}
+
+/// Where a member is in `create`, in the order it gets there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "step", rename_all = "snake_case")]
+pub enum Step {
+    /// Bringing the project's source repo up to date.
+    Fetch,
+    /// `git worktree add`.
+    Worktree,
+    /// One `post_worktree_create` script, and where its output is going.
+    Script { name: String, log: PathBuf },
+}
+
+/// How far a step has got.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepState {
+    Started,
+    Done,
+    Failed,
+}
+
 /// Runs one request against one engine.
 pub fn dispatch<E: Engine + ?Sized>(engine: &E, request: Request) -> Result<Response, EngineError> {
     match request {
@@ -741,6 +785,41 @@ mod tests {
         assert!(json.contains(r#""action":"plane_destroy""#), "got {json}");
         assert!(json.contains(r#""uncommitted""#), "got {json}");
         assert_eq!(serde_json::from_str::<Request>(&json).unwrap(), request);
+    }
+
+    #[test]
+    fn a_progress_event_is_one_flat_object_on_the_wire() {
+        let event = ProgressEvent::Member {
+            member: MemberRef::parse("@api").unwrap(),
+            step: Step::Script {
+                name: "install".to_owned(),
+                log: PathBuf::from("/planes/auth-work/.bitplane/logs/install.log"),
+            },
+            state: StepState::Started,
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+
+        assert_eq!(
+            json,
+            r#"{"event":"member","member":"@api","step":"script","name":"install","log":"/planes/auth-work/.bitplane/logs/install.log","state":"started"}"#
+        );
+        assert_eq!(serde_json::from_str::<ProgressEvent>(&json).unwrap(), event);
+    }
+
+    #[test]
+    fn a_lock_wait_names_the_object() {
+        let event = ProgressEvent::Waiting {
+            object: PathBuf::from("/planes/auth-work/.bitplane/lock"),
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+
+        assert_eq!(
+            json,
+            r#"{"event":"waiting","object":"/planes/auth-work/.bitplane/lock"}"#
+        );
+        assert_eq!(serde_json::from_str::<ProgressEvent>(&json).unwrap(), event);
     }
 
     #[test]

@@ -4,11 +4,9 @@ title: bp request
 
 # `bp request`
 
-:::in-progress
+:::implemented
 
-Everything on this page works as described, except:
-
-- **`--progress-fd` is not accepted.**
+Everything on this page works as described.
 
 :::
 
