@@ -76,6 +76,7 @@ mod reference {
         global_flags => "global-flags.md",
         member_syntax => "member-syntax.md",
         refusals_and_waivers => "refusals-and-waivers.md",
+        request => "request.md",
         plane_add => "plane/add.md",
         plane_create => "plane/create.md",
         plane_destroy => "plane/destroy.md",

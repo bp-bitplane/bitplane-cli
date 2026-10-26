@@ -43,7 +43,9 @@ pub enum Expectation {
 /// The cases for one page.
 pub fn of(page: &str) -> Vec<Case> {
     match page {
-        "exit-codes.md" | "global-flags.md" => vec![],
+        // `request` reads stdin, which an example cannot stage: its
+        // behaviour is asserted by `tests/request.rs` instead.
+        "exit-codes.md" | "global-flags.md" | "request.md" => vec![],
         "member-syntax.md" => member_syntax(),
         "refusals-and-waivers.md" => refusals(),
         "plane/add.md" => plane_add(),

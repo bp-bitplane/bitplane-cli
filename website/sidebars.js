@@ -43,6 +43,7 @@ const sidebars = {
     'reference/member-syntax',
     'reference/exit-codes',
     'reference/refusals-and-waivers',
+    'reference/request',
     // Plane verbs are bare, project verbs are always prefixed. The split is
     // visible here, in the navigation, and not only in the prose (ADR-0006).
     {
