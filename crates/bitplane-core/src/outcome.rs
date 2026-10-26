@@ -18,6 +18,7 @@ use crate::member::{MemberRef, ProjectName};
 
 /// One member's row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PerMember<T> {
     pub member: MemberRef,
     /// Flattened, so a row is one flat object on the wire: the key beside the
@@ -35,6 +36,7 @@ pub struct PerMember<T> {
 /// format — a reader of a row should not have to know which fan-out it came
 /// from to read its subject.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct PerProject<T> {
     pub project: ProjectName,
     #[serde(flatten)]
@@ -47,6 +49,7 @@ pub struct PerProject<T> {
 /// arm's payload — a struct, a bare reason, a typed failure — serialises the
 /// same way.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "outcome", content = "detail", rename_all = "snake_case")]
 pub enum Outcome<T> {
     /// It was done by this run.
@@ -63,6 +66,7 @@ pub enum Outcome<T> {
 
 /// Why a member was not attempted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum SkipReason {

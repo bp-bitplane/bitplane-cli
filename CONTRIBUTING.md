@@ -84,6 +84,22 @@ pad their neighbours differently. Alignment is asserted byte for byte by the
 hand-written tests beside the suite; what a reference example is for is the
 words.
 
+## The TypeScript contract
+
+`crates/bitplane-core/bp-contract.ts` is the wire types — `Request`,
+`Response`, `ErrorEnvelope`, `ProgressEvent` and everything they reach —
+generated with specta behind the `ts` feature, pinned to the exact version
+bitplane-cc uses. Clients import it instead of copying types by hand.
+
+It is committed, and CI fails when it is stale. After changing a wire type:
+
+```sh
+BITPLANE_BLESS=1 cargo test -p bitplane-core --features ts --test contract
+```
+
+and commit the result. A change a client built against the previous file would
+misread also bumps `CONTRACT_VERSION` in `wire.rs`.
+
 ## Domain vocabulary
 
 `CONTEXT.md` is the glossary and `docs/adr/` holds the decisions. Every ticket,

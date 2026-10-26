@@ -20,6 +20,7 @@ const ABBREVIATED_COMMIT: usize = 7;
 
 /// What a worktree's `HEAD` names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "head", rename_all = "snake_case")]
 pub enum Head {
     /// The ordinary case: a branch.

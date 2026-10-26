@@ -50,6 +50,8 @@ pub const RESERVED_NAME_SEGMENTS: [&str; 2] = [REPO_DIR_NAME, BIN_DIR_NAME];
 
 /// What a member is a worktree of.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+#[cfg_attr(feature = "ts", specta(type = String))]
 #[serde(into = "String", try_from = "String")]
 pub enum MemberRef {
     /// A registered project, written `@codestyle`.
@@ -62,6 +64,8 @@ pub enum MemberRef {
 /// the charset ADR-0007 settled. Never carries the sigil — the parser strips it
 /// once, at the read boundary, and it is a bare name everywhere after.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+#[cfg_attr(feature = "ts", specta(type = String))]
 #[serde(into = "String", try_from = "String")]
 pub struct ProjectName(String);
 
@@ -71,6 +75,8 @@ pub struct ProjectName(String);
 /// recomputed — so an existing plane keeps the layout it was built with when
 /// the derivation rules change.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+#[cfg_attr(feature = "ts", specta(type = String))]
 #[serde(into = "String", try_from = "String")]
 pub struct WorktreePath(PathBuf);
 

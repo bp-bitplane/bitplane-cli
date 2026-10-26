@@ -20,6 +20,7 @@ use crate::wire::{CreatedMember, PlaneRef, RemovedMember, ScriptOutcome};
 
 /// What every bitplane failure looks like on the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct ErrorEnvelope {
     /// A stable machine tag — matched on by scripts, never rendered to a user.
     pub error: String,
@@ -36,6 +37,7 @@ pub struct ErrorEnvelope {
 
 /// One of the things that was wrong.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 pub struct Problem {
     /// What the problem is about — a member, a plane id, a path — rendered for
     /// display. `None` where the problem is about the operation as a whole.
@@ -49,6 +51,7 @@ pub struct Problem {
 /// Serialisable in both directions, because a fan-out row carries one of these
 /// as data rather than as an envelope (ADR-0003).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "error", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum EngineError {
@@ -170,9 +173,11 @@ pub enum EngineError {
     /// result and are reported alongside this, because a fan-out row is data
     /// rather than an error once the fan-out has begun.
     FetchFailed {
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         failed: usize,
         /// The projects there was something to fetch **for**. An adopted
         /// project is a row, never a denominator.
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         fetchable: usize,
         problems: Vec<Problem>,
     },
@@ -258,9 +263,11 @@ pub enum EngineError {
         plane: String,
         operation: Teardown,
         /// How many members raised at least one surviving reason.
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         blocking: usize,
         /// How many members were under consideration — the plane's, for
         /// `destroy`; the ones named, for `rm`.
+        #[cfg_attr(feature = "ts", specta(type = u32))]
         considered: usize,
         refusals: Vec<Refusal>,
     },
@@ -317,6 +324,7 @@ pub enum EngineError {
 /// Three different things, so the remedy names what is actually there rather
 /// than saying "already in use" and leaving the user to look.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Occupant {
@@ -336,6 +344,7 @@ pub enum Occupant {
 /// as destroying a one-member plane (ADR-0006) — so they share every failure and
 /// differ only in the sentence they print.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Teardown {
@@ -347,6 +356,7 @@ pub enum Teardown {
 
 /// Which way a branch intent was not met.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum BranchWanted {

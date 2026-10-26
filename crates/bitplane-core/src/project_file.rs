@@ -75,6 +75,7 @@ pub struct ProjectFile {
 /// Where a project's repo comes from — and, because the two are in 1:1
 /// correspondence, which kind of project it is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProjectSource {
     /// bitplane built the source repo and owns its refs and its config.

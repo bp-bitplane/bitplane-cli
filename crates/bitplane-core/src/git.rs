@@ -26,6 +26,8 @@ pub const MINIMUM_GIT_VERSION: GitVersion = GitVersion::new(2, 36, 0);
 /// A git version, compared as `(major, minor, patch)` — which is the field
 /// order, because that is what the derived ordering uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(specta::Type))]
+#[cfg_attr(feature = "ts", specta(type = String))]
 #[serde(into = "String", try_from = "String")]
 pub struct GitVersion {
     pub major: u32,
