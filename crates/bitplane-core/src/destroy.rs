@@ -56,6 +56,7 @@ use crate::outcome::{Outcome, PerMember, SkipReason};
 use crate::plan;
 use crate::plane_dir::OpenPlane;
 use crate::plane_file::{self, Member, PlaneFile};
+use crate::progress;
 use crate::read;
 use crate::refusal::{Reason, Refusal, Waivers};
 use crate::repo::{Git, Insistence, WorkingTree, WorktreeLock, canonical_path};
@@ -84,6 +85,7 @@ impl TeardownContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.on_script_output,
+            progress: &progress::silent,
         }
     }
 }

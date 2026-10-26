@@ -10,6 +10,7 @@ use crate::engine::{Engine, Reader};
 use crate::error::EngineError;
 use crate::git::{GitPrerequisite, GitVersion, SystemGit};
 use crate::interrupt::Interrupt;
+use crate::progress;
 use crate::project_add::{self, ProjectContext};
 use crate::project_fetch::{self, FetchContext};
 use crate::project_list;
@@ -20,12 +21,15 @@ use crate::wire::{
     PlaneAddRequest, PlaneAdded, PlaneCreateRequest, PlaneCreated, PlaneDestroyRequest,
     PlaneDestroyed, PlaneList, PlaneListRequest, PlaneRemoveRequest, PlaneRemoved,
     PlaneScriptsRequest, PlaneShowRequest, PlaneStatus, PlaneStatusRequest, PlaneView,
-    ProjectAddRequest, ProjectAdded, ProjectFetchRequest, ProjectFetched, ProjectListing,
-    ScriptsRun,
+    ProgressEvent, ProjectAddRequest, ProjectAdded, ProjectFetchRequest, ProjectFetched,
+    ProjectListing, ScriptsRun,
 };
 
 /// Where a script's merged output goes as it arrives.
 type ScriptSink = Box<dyn Fn(&[u8]) + Send + Sync>;
+
+/// Where a running action reports its progress.
+type ProgressSink = Box<dyn Fn(&ProgressEvent) + Send + Sync>;
 
 /// bitplane on the local host.
 ///
@@ -39,6 +43,7 @@ pub struct LocalEngine {
     interrupt: Interrupt,
     on_lock_wait: Box<dyn Fn(&Path) + Send + Sync>,
     on_script_output: ScriptSink,
+    on_progress: ProgressSink,
 }
 
 impl LocalEngine {
@@ -52,6 +57,7 @@ impl LocalEngine {
             interrupt: Interrupt::never(),
             on_lock_wait: Box::new(|_| {}),
             on_script_output: Box::new(|_| {}),
+            on_progress: Box::new(progress::silent),
         }
     }
 
@@ -93,6 +99,18 @@ impl LocalEngine {
         stream: impl Fn(&[u8]) + Send + Sync + 'static,
     ) -> LocalEngine {
         self.on_script_output = Box::new(stream);
+        self
+    }
+
+    /// Where a running action reports each member's steps as they happen.
+    ///
+    /// The same seam again (ADR-0010). Only `create` reports anything; without
+    /// a sink, nothing is reported and nothing is slower for it.
+    pub fn reporting_progress(
+        mut self,
+        report: impl Fn(&ProgressEvent) + Send + Sync + 'static,
+    ) -> LocalEngine {
+        self.on_progress = Box::new(report);
         self
     }
 
@@ -165,6 +183,7 @@ impl Engine for LocalEngine {
                 interrupt: self.interrupt,
                 on_lock_wait: &*self.on_lock_wait,
                 on_script_output: &*self.on_script_output,
+                on_progress: &*self.on_progress,
             },
         )
     }
@@ -202,6 +221,7 @@ impl Engine for LocalEngine {
                 git: &self.git,
                 interrupt: self.interrupt,
                 on_lock_wait: &*self.on_lock_wait,
+                on_progress: &progress::silent,
             },
         )
     }

@@ -20,8 +20,9 @@ use crate::error::EngineError;
 use crate::interrupt::Interrupt;
 use crate::outcome::{Outcome, PerMember, SkipReason};
 use crate::plan::{Base, PlannedMember};
+use crate::progress::ProgressSink;
 use crate::repo::{Git, Insistence, canonical_path as canonical};
-use crate::wire::CreatedMember;
+use crate::wire::{CreatedMember, ProgressEvent, Step, StepState};
 
 /// How many worktrees are built at once.
 ///
@@ -36,11 +37,15 @@ const MAX_WORKERS: usize = 4;
 /// "Stop scheduling" is literal — a worker that finds the run aborted or
 /// interrupted takes no more members, while the children already running are
 /// left to land and are then unwound.
+///
+/// A member that is attempted is reported to `progress` as it starts and as it
+/// ends; one that is skipped never started, so it reports nothing.
 pub fn build(
     planned: &[PlannedMember],
     plane_directory: &Path,
     git: &Git,
     interrupt: Interrupt,
+    progress: &ProgressSink,
 ) -> Vec<PerMember<CreatedMember>> {
     let next = AtomicUsize::new(0);
     let stop = AtomicBool::new(false);
@@ -61,10 +66,23 @@ pub fn build(
                     } else if stop.load(Ordering::SeqCst) {
                         Outcome::Skipped(SkipReason::AbortedAfterEarlierFailure)
                     } else {
+                        let report = |state| {
+                            progress(&ProgressEvent::Member {
+                                member: member.reference.clone(),
+                                step: Step::Worktree,
+                                state,
+                            })
+                        };
+                        report(StepState::Started);
+
                         match add_worktree(member, plane_directory, git) {
-                            Ok(created) => Outcome::Ok(created),
+                            Ok(created) => {
+                                report(StepState::Done);
+                                Outcome::Ok(created)
+                            }
                             Err(error) => {
                                 stop.store(true, Ordering::SeqCst);
+                                report(StepState::Failed);
                                 Outcome::Failed(error)
                             }
                         }

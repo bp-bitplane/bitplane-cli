@@ -39,10 +39,11 @@ use crate::error::EngineError;
 use crate::interrupt::Interrupt;
 use crate::member::{MemberRef, ProjectName};
 use crate::outcome::{Outcome, PerProject, SkipReason};
+use crate::progress::ProgressSink;
 use crate::project_dir::{self, ProjectDirectory};
 
 use crate::repo::Git;
-use crate::wire::{Fetched, ProjectFetchRequest, ProjectFetched};
+use crate::wire::{Fetched, ProgressEvent, ProjectFetchRequest, ProjectFetched, Step, StepState};
 
 /// How many projects are fetched at once. The cap exists because a host with
 /// thirty projects should not open thirty connections to a forge.
@@ -55,6 +56,9 @@ pub struct FetchContext<'a> {
     pub interrupt: Interrupt,
     /// Called once per contended project lock.
     pub on_lock_wait: &'a (dyn Fn(&Path) + Sync),
+    /// Told as each project's fetch starts and ends. Only `create` listens
+    /// (ADR-0010); `bp project fetch` itself reports nothing yet.
+    pub on_progress: &'a ProgressSink,
 }
 
 /// Fetches the projects named, or every registered project where none is.
@@ -136,9 +140,24 @@ fn fetch_all(
                     let outcome = if context.interrupt.is_raised() {
                         Outcome::Skipped(SkipReason::Interrupted)
                     } else {
+                        let report = |state| {
+                            (context.on_progress)(&ProgressEvent::Member {
+                                member: MemberRef::Project(project.name().clone()),
+                                step: Step::Fetch,
+                                state,
+                            })
+                        };
+                        report(StepState::Started);
+
                         match fetch_one(project, context) {
-                            Ok(outcome) => outcome,
-                            Err(error) => Outcome::Failed(error),
+                            Ok(outcome) => {
+                                report(StepState::Done);
+                                outcome
+                            }
+                            Err(error) => {
+                                report(StepState::Failed);
+                                Outcome::Failed(error)
+                            }
                         }
                     };
 

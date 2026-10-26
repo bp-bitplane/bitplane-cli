@@ -29,6 +29,7 @@ pub mod plan;
 pub mod plane_dir;
 pub mod plane_file;
 pub mod plane_id;
+pub mod progress;
 pub mod project_add;
 pub mod project_dir;
 pub mod project_fetch;
@@ -63,6 +64,7 @@ pub use member::{MemberRef, ProjectName, WorktreePath};
 pub use outcome::{Outcome, PerMember, PerProject, SkipReason};
 pub use plane_file::{Member, PlaneFile};
 pub use plane_id::PlaneId;
+pub use progress::ProgressSink;
 pub use project_file::{ProjectFile, ProjectSource};
 pub use refusal::{Reason, Refusal, Waivers};
 pub use scripts::{Script, ScriptCommand, ScriptName, ScriptPoint};
@@ -72,7 +74,7 @@ pub use wire::{
     MemberView, MemberWork, PlaneAddRequest, PlaneAdded, PlaneCreateRequest, PlaneCreated,
     PlaneDestroyRequest, PlaneDestroyed, PlaneList, PlaneListRequest, PlaneRef, PlaneRemoveRequest,
     PlaneRemoved, PlaneScriptsRequest, PlaneShowRequest, PlaneStatus, PlaneStatusRequest,
-    PlaneView, ProjectAddRequest, ProjectAdded, ProjectFetchRequest, ProjectFetched,
+    PlaneView, ProgressEvent, ProjectAddRequest, ProjectAdded, ProjectFetchRequest, ProjectFetched,
     ProjectListing, ProjectSummary, RemovedMember, Request, Response, ScriptOutcome, ScriptResult,
-    ScriptsRun, dispatch,
+    ScriptsRun, Step, StepState, dispatch,
 };

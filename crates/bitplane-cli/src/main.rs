@@ -8,8 +8,11 @@ mod interrupt;
 mod render;
 
 use std::ffi::OsString;
+use std::fs::File;
 use std::io::{Read, Write};
+use std::os::fd::{FromRawFd, RawFd};
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use bitplane_core::{
     BranchIntent, CONTRACT_VERSION, Directories, DirectoryOverrides, EngineError, ErrorEnvelope,
@@ -90,7 +93,7 @@ enum Command {
     Project(ProjectCommand),
 
     /// Run one request, read as JSON from stdin.
-    Request,
+    Request(RequestArgs),
 }
 
 /// The project verbs. Prefixed with `project`, where a plane verb is bare.
@@ -146,6 +149,20 @@ struct ProjectFetchArgs {
 }
 
 #[derive(Debug, Args)]
+struct RequestArgs {
+    #[command(flatten)]
+    progress: ProgressArg,
+}
+
+/// Where a running `create` reports what it is doing (ADR-0010).
+#[derive(Debug, Args)]
+struct ProgressArg {
+    /// Write progress as JSON lines to this already-open file descriptor.
+    #[arg(long, value_name = "fd", value_parser = clap::value_parser!(RawFd).range(0..))]
+    progress_fd: Option<RawFd>,
+}
+
+#[derive(Debug, Args)]
 struct CreateArgs {
     /// The members: `@name` for a project, a path for an ad-hoc member. Each
     /// may carry a `:branch` suffix.
@@ -172,6 +189,9 @@ struct CreateArgs {
 
     #[command(flatten)]
     scripts: ScriptsArg,
+
+    #[command(flatten)]
+    progress: ProgressArg,
 }
 
 /// Whether the branch asked for must exist, must not, or either.
@@ -403,17 +423,24 @@ fn execute(cli: Cli, rendering: Rendering) -> Invocation {
         return failed(no_command(), rendering);
     };
 
+    // Checked before anything is read, resolved or created: a descriptor that
+    // cannot take progress is a mistake on the command line.
+    let progress = match progress_fd_of(&command).map(progress_channel).transpose() {
+        Ok(progress) => progress,
+        Err(envelope) => return failed(envelope, rendering),
+    };
+
     let request = match command {
         // Read before anything else is checked: input that is not a request is
         // a usage failure, as a command line clap would not parse is.
-        Command::Request => match request_from(std::io::stdin().lock()) {
+        Command::Request(_) => match request_from(std::io::stdin().lock()) {
             Ok(request) => Ok(request),
             Err(envelope) => return failed(envelope, rendering),
         },
         command => request_for(command),
     };
 
-    match answer(request, &cli.global) {
+    match answer(request, &cli.global, progress) {
         Ok(response) => {
             // Results and a failure are not alternatives: a fan-out whose rows
             // are the result can still report that it did not fully succeed,
@@ -436,6 +463,7 @@ fn execute(cli: Cli, rendering: Rendering) -> Invocation {
 fn answer(
     request: Result<Request, EngineError>,
     global: &GlobalFlags,
+    progress: Option<File>,
 ) -> Result<Response, EngineError> {
     let directories = Directories::resolve(
         &DirectoryOverrides {
@@ -446,7 +474,7 @@ fn answer(
         &SystemEnvironment,
     )?;
 
-    let engine = LocalEngine::new(directories)
+    let mut engine = LocalEngine::new(directories)
         .with_interrupt(Interrupt::process())
         .announcing_lock_waits(|object| {
             // Progress, not a result, so it goes to stderr in both modes.
@@ -460,6 +488,19 @@ fn answer(
             let _ = stderr.write_all(bytes);
             let _ = stderr.flush();
         });
+
+    if let Some(channel) = progress {
+        let channel = Mutex::new(channel);
+        engine = engine.reporting_progress(move |event| {
+            // One write per line, under the lock, so lines from parallel
+            // members never interleave. A failure is dropped: the channel is
+            // never load-bearing (ADR-0010).
+            let line = format!("{}\n", serde_json::to_string(event).unwrap_or_default());
+            if let Ok(mut channel) = channel.lock() {
+                let _ = channel.write_all(line.as_bytes());
+            }
+        });
+    }
 
     // git is checked once, before any command touches anything (ADR-0001).
     engine.ensure_git_supported()?;
@@ -549,6 +590,45 @@ fn version_json() -> String {
     )
 }
 
+/// The `--progress-fd` a command was given, where it takes one.
+fn progress_fd_of(command: &Command) -> Option<RawFd> {
+    match command {
+        Command::Create(args) => args.progress.progress_fd,
+        Command::Request(args) => args.progress.progress_fd,
+        _ => None,
+    }
+}
+
+/// Takes ownership of `fd`, once it is known to be open for writing and not
+/// one of the three streams whose bytes `--progress-fd` promises to leave
+/// alone.
+fn progress_channel(fd: RawFd) -> Result<File, ErrorEnvelope> {
+    let refused = |message: String, remedy: &str| {
+        Err(ErrorEnvelope::usage("bad_progress_fd", message).with_remedy(remedy))
+    };
+
+    if fd <= 2 {
+        return refused(
+            format!("file descriptor {fd} is one of bp's own streams"),
+            "Pass a descriptor above 2: stdin, stdout and stderr are taken.",
+        );
+    }
+
+    // SAFETY: `F_GETFL` only reads the descriptor's flags; on a descriptor
+    // that is not open it fails with `EBADF` and touches nothing.
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags == -1 || flags & libc::O_ACCMODE == libc::O_RDONLY {
+        return refused(
+            format!("file descriptor {fd} is not open for writing"),
+            "Open the descriptor for writing before running bp, or drop --progress-fd.",
+        );
+    }
+
+    // SAFETY: the descriptor is open, and nothing else in this process uses
+    // it: the caller opened it for `bp` and named it on the command line.
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
 /// `bp request`: exactly one request, as JSON, and nothing after it.
 fn request_from(mut input: impl Read) -> Result<Request, ErrorEnvelope> {
     let mut text = String::new();
@@ -624,7 +704,7 @@ fn request_for(command: Command) -> Result<Request, EngineError> {
             // here, so there is nothing for it to disambiguate.
             projects: vec![project_name(&args.project)?],
         }),
-        Command::Request => unreachable!("`bp request` reads its request from stdin"),
+        Command::Request(_) => unreachable!("`bp request` reads its request from stdin"),
     })
 }
 

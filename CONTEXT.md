@@ -232,6 +232,11 @@ The distinction is load-bearing because conflating the two is what let "always J
 
 _Avoid_: "the JSON error", "the error JSON" — both name a rendering as though it were the contract.
 
+**progress event**
+One step of one member, reported while a fan-out is still running: `{ member, step, state }`, keyed by `MemberRef` like the row it will become, or `waiting { object }` for a contended lock. Written to the **progress fd** a caller names with `--progress-fd`, never to stdout or stderr. There is no final event — the result is. See ADR-0010.
+
+_Avoid_: "status update", "log line" — progress is structured and carries no output; script output stays on stderr.
+
 **reap**
 Destroying a plane judged to be garbage.
 

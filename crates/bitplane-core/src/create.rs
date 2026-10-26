@@ -46,12 +46,13 @@ use crate::plan::{self, PlanContext, PlannedMember};
 use crate::plane_dir::{self, ClaimedPlane};
 use crate::plane_file::{Member, PlaneFile};
 use crate::plane_id::PlaneId;
+use crate::progress::ProgressSink;
 use crate::project_fetch::{self, FetchContext};
 use crate::repo::Git;
 use crate::scripts::{self, InPlane, ScriptContext, ScriptPoint, Stop};
 use crate::wire::{
-    BranchIntent, CreatedMember, PlaneCreateRequest, PlaneCreated, ProjectFetchRequest,
-    ScriptOutcome,
+    BranchIntent, CreatedMember, PlaneCreateRequest, PlaneCreated, ProgressEvent,
+    ProjectFetchRequest, ScriptOutcome,
 };
 use crate::worktrees;
 
@@ -68,6 +69,9 @@ pub struct CreateContext<'a> {
     pub on_lock_wait: &'a (dyn Fn(&Path) + Sync),
     /// Where merged script output goes as it arrives.
     pub on_script_output: &'a (dyn Fn(&[u8]) + Sync),
+    /// Told as each member starts and ends each step, and when a lock is
+    /// waited for (ADR-0010).
+    pub on_progress: &'a ProgressSink,
 }
 
 impl CreateContext<'_> {
@@ -86,6 +90,7 @@ impl CreateContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.on_script_output,
+            progress: self.on_progress,
         }
     }
 }
@@ -95,6 +100,19 @@ pub fn plane_create(
     request: &PlaneCreateRequest,
     context: &CreateContext<'_>,
 ) -> Result<PlaneCreated, EngineError> {
+    // Every lock `create` takes — the plane's, and each project's for its
+    // fetch — is announced to both: the surface's own words, and an event.
+    let on_lock_wait = |object: &Path| {
+        (context.on_lock_wait)(object);
+        (context.on_progress)(&ProgressEvent::Waiting {
+            object: object.to_path_buf(),
+        });
+    };
+    let context = &CreateContext {
+        on_lock_wait: &on_lock_wait,
+        ..*context
+    };
+
     validate(
         request.intent,
         request.fetch,
@@ -112,7 +130,13 @@ pub fn plane_create(
     claimed.latch()?;
     claimed.write_plane_file(&membership(claimed.id().clone(), &planned))?;
 
-    let members = worktrees::build(&planned, claimed.path(), context.git, context.interrupt);
+    let members = worktrees::build(
+        &planned,
+        claimed.path(),
+        context.git,
+        context.interrupt,
+        context.on_progress,
+    );
     let interrupted = context.interrupt.is_raised();
 
     if interrupted || members.iter().any(PerMember::is_failure) {
@@ -226,6 +250,7 @@ fn fetch_first(projects: &[String], context: &CreateContext<'_>) -> Result<(), E
             git: context.git,
             interrupt: context.interrupt,
             on_lock_wait: context.on_lock_wait,
+            on_progress: context.on_progress,
         },
     )?;
 
