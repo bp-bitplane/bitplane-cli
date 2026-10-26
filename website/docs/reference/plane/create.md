@@ -4,9 +4,11 @@ title: bp create
 
 # `bp create`
 
-:::implemented
+:::in-progress
 
-Everything on this page works as described.
+Everything on this page works as described, except:
+
+- **`--progress-fd` is not accepted.**
 
 :::
 
@@ -14,7 +16,7 @@ Create a plane and the worktrees of every member named on the command line.
 
 ```
 bp create <member>... [-b <branch>] [--id <id> | --here] [--new-branch | --existing-branch]
-          [--no-fetch] [--no-scripts]
+          [--no-fetch] [--no-scripts] [--progress-fd <fd>]
 ```
 
 `create` is **strict, not idempotent**: it either makes a whole plane or it
@@ -49,6 +51,7 @@ branch is cut from, not a branch to land on.
 | `--existing-branch` | — | The branch must already exist. Fails if it does not. |
 | `--no-fetch` | fetch first | Skip the fetch of every owned project. |
 | `--no-scripts` | run them | Do not run `post_worktree_create` scripts. |
+| `--progress-fd <fd>` | — | Write [progress](#progress) as JSON lines to this already-open file descriptor. |
 
 Plus the [global flags](../global-flags.md#global-flags). `create` takes no
 `--plane`: it is making one.
@@ -108,6 +111,53 @@ concurrent `--here` runs in one directory apart.
 
 **An abort empties the directory rather than removing it.** You made it, not
 `bp`, and your shell is sitting in it.
+
+### Progress
+
+`--progress-fd <fd>` is for a program that runs `bp create` and wants to show
+it happening: the daemon behind bitplane-cc does. `bp` writes one JSON object
+per line to the descriptor as each member moves through each step:
+
+```sh
+$ bp create @api @web -b feat-login --json --progress-fd 3 3>progress.jsonl
+```
+```json
+{"event":"member","member":"@api","step":"fetch","state":"started"}
+{"event":"member","member":"@web","step":"fetch","state":"started"}
+{"event":"member","member":"@api","step":"fetch","state":"done"}
+{"event":"member","member":"@web","step":"fetch","state":"done"}
+{"event":"member","member":"@api","step":"worktree","state":"started"}
+{"event":"member","member":"@web","step":"worktree","state":"started"}
+{"event":"member","member":"@web","step":"worktree","state":"done"}
+{"event":"member","member":"@api","step":"worktree","state":"done"}
+{"event":"member","member":"@api","step":"script","name":"install","log":"/Users/alfonz/planes/bp-a3f9c2e1/.bitplane/logs/20260921T140312Z-api-install.log","state":"started"}
+{"event":"member","member":"@api","step":"script","name":"install","log":"/Users/alfonz/planes/bp-a3f9c2e1/.bitplane/logs/20260921T140312Z-api-install.log","state":"done"}
+```
+
+| field | what it holds |
+| --- | --- |
+| `event` | `member` for a step, `waiting` for a contended lock |
+| `member` | the member, as a [fan-out row](../global-flags.md#how-a-fan-out-prints) names it |
+| `step` | `fetch`, `worktree` or `script`, in that order for any one member |
+| `state` | `started`, then `done` or `failed` |
+| `name`, `log` | a script's name and its log file, on `script` steps only |
+| `object` | the lock being waited for, on `waiting` only |
+
+A member's steps arrive in order; different members' interleave, because they
+run in parallel. A member with nothing to fetch still gets its fetch step, and
+one with no scripts gets none. A contended lock is
+`{"event":"waiting","object":"<path>"}`, alongside the `waiting for …` line
+stderr already carries.
+
+**There is no final event.** The stream ends when `bp` exits; the exit code and
+the result on stdout say how it went. **stdout and stderr are exactly what they
+are without the flag**, script output included.
+
+The descriptor must be open for writing, and may not be `0`, `1` or `2`;
+anything else is
+[`bad_progress_fd`](../refusals-and-waivers.md#usage-failures), exit `2`, before
+anything is fetched or created. Once the run has started, a write that fails —
+the reader went away — is dropped and the run carries on.
 
 ## Output
 

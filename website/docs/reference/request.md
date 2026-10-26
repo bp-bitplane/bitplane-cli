@@ -4,9 +4,11 @@ title: bp request
 
 # `bp request`
 
-:::implemented
+:::in-progress
 
-Everything on this page works as described.
+Everything on this page works as described, except:
+
+- **`--progress-fd` is not accepted.**
 
 :::
 
@@ -14,7 +16,7 @@ Run one request, read as JSON from stdin, instead of building it from a command
 line.
 
 ```
-bp request [--json] < request.json
+bp request [--json] [--progress-fd <fd>] < request.json
 ```
 
 `request` is for **programs** that drive `bp`: a daemon, an editor, a script
@@ -57,6 +59,14 @@ remedy: Send exactly one request, as JSON, on stdin.
 ## Arguments
 
 None. The request carries everything.
+
+## Flags
+
+| flag | default | what it does |
+| --- | --- | --- |
+| `--progress-fd <fd>` | — | Write progress as JSON lines to this already-open file descriptor, exactly as [`bp create --progress-fd`](./plane/create.md#progress) does. Only a `plane_create` request reports any. |
+
+Plus the [global flags](./global-flags.md#global-flags).
 
 ## Output
 
