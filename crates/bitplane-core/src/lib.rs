@@ -10,6 +10,8 @@
 //! Windows, and that deferral binds exactly this one constraint.
 
 pub mod add;
+#[cfg(feature = "typescript")]
+pub mod contract;
 pub mod create;
 pub mod destroy;
 pub mod directories;

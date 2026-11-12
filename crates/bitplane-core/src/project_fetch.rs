@@ -43,8 +43,7 @@ use crate::project_dir::{self, ProjectDirectory};
 
 use crate::repo::Git;
 use crate::wire::{
-    Fetched, ProgressEvent, ProgressSink, ProgressStep, ProjectFetchRequest, ProjectFetched,
-    StepState,
+    Fetched, ProgressEvent, ProgressSink, ProjectFetchRequest, ProjectFetched, StepState,
 };
 
 /// How many projects are fetched at once. The cap exists because a host with
@@ -171,8 +170,7 @@ fn fetch_one(
     context: &FetchContext<'_>,
 ) -> Result<Outcome<Fetched>, EngineError> {
     let member = MemberRef::Project(project.name().clone());
-    let report =
-        |state| (context.on_progress)(&ProgressEvent::step(&member, ProgressStep::Fetch, state));
+    let report = |state| (context.on_progress)(&ProgressEvent::fetch(&member, state));
 
     let file = project
         .read_project_file()

@@ -60,8 +60,10 @@ const SHELL: &str = "/bin/sh";
 
 /// A script's name: the same character set as a plane id, so a user-chosen name
 /// is never trusted into a path.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
+#[cfg_attr(feature = "typescript", specta(type = String))]
 pub struct ScriptName(String);
 
 /// One of the two moments bitplane fires scripts at.
@@ -70,6 +72,7 @@ pub struct ScriptName(String);
 /// per-project: `post_worktree_create` fires per member on both `create` and
 /// `add`, and `pre_worktree_remove` on both `destroy` and `rm`. Both are the
 /// identical situation seen twice.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -87,6 +90,7 @@ pub enum ScriptPoint {
 /// just makes everyone write `["sh", "-c", …]`. A bare string shorthand is
 /// rejected deliberately: a list of strings reads like argv and would mean
 /// shell.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptCommand {
@@ -95,6 +99,7 @@ pub enum ScriptCommand {
 }
 
 /// One `[scripts.<name>]` table, as the file holds it.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Script {
     pub name: ScriptName,
@@ -334,7 +339,7 @@ fn run_one(
     let member = MemberRef::Project(site.project.clone());
     (context.progress)(&ProgressEvent::script(
         &member,
-        script.name.as_str(),
+        &script.name,
         &log,
         StepState::Started,
     ));
@@ -356,12 +361,7 @@ fn run_one(
         ScriptResult::Ok => StepState::Done,
         ScriptResult::Failed { .. } => StepState::Failed,
     };
-    (context.progress)(&ProgressEvent::script(
-        &member,
-        script.name.as_str(),
-        &log,
-        state,
-    ));
+    (context.progress)(&ProgressEvent::script(&member, &script.name, &log, state));
 
     Ok(ScriptOutcome {
         name: script.name.to_string(),

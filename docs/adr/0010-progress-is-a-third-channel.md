@@ -122,6 +122,14 @@ is fetched or created.
   need to: EOF is the end, and a step that never started has no row.
 - `fetch` events exist only for owned projects; an adopted project or an ad-hoc
   member has nothing to fetch and goes straight to `worktree`.
+- **Clients get the wire as generated TypeScript**, not hand-copies:
+  `crates/bitplane-core/bp-contract.ts`, covering requests, responses, the
+  envelope, progress events and `VersionInfo`. The `typescript` feature derives
+  `specta::Type` with the exact `specta`, `specta-serde` and `specta-typescript`
+  versions bitplane-cc pins, so the TypeScript both emit agrees. A plain build
+  compiles none of it and no wire byte changes; a test fails when the committed
+  file disagrees with the types. This amends ADR-0003's list of crates
+  `bitplane-core` takes.
 
 ## Alternatives considered
 

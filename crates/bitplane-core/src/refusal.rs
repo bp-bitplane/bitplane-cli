@@ -24,6 +24,7 @@ use crate::member::MemberRef;
 ///
 /// The declaration order is the order a remedy lists them in, so a pasted
 /// `--waive` line reads the same way every time.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -42,6 +43,7 @@ pub enum Reason {
 }
 
 /// One member's reason, with the sentence it prints.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Refusal {
     pub member: MemberRef,

@@ -29,8 +29,10 @@ pub const MAX_PLANE_ID_LENGTH: usize = 64;
 pub const GENERATED_ID_ATTEMPTS: usize = 5;
 
 /// A plane id: lowercase `[a-z0-9][a-z0-9._-]*`, 64 characters at most.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
+#[cfg_attr(feature = "typescript", specta(type = String))]
 pub struct PlaneId(String);
 
 impl PlaneId {

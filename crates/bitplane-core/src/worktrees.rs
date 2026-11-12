@@ -21,7 +21,7 @@ use crate::interrupt::Interrupt;
 use crate::outcome::{Outcome, PerMember, SkipReason};
 use crate::plan::{Base, PlannedMember};
 use crate::repo::{Git, Insistence, canonical_path as canonical};
-use crate::wire::{CreatedMember, ProgressEvent, ProgressSink, ProgressStep, StepState};
+use crate::wire::{CreatedMember, ProgressEvent, ProgressSink, StepState};
 
 /// How many worktrees are built at once.
 ///
@@ -62,13 +62,8 @@ pub fn build(
                     } else if stop.load(Ordering::SeqCst) {
                         Outcome::Skipped(SkipReason::AbortedAfterEarlierFailure)
                     } else {
-                        let report = |state| {
-                            progress(&ProgressEvent::step(
-                                &member.reference,
-                                ProgressStep::Worktree,
-                                state,
-                            ))
-                        };
+                        let report =
+                            |state| progress(&ProgressEvent::worktree(&member.reference, state));
                         report(StepState::Started);
                         let added = add_worktree(member, plane_directory, git);
                         report(StepState::of(&added));
