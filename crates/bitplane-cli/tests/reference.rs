@@ -75,6 +75,8 @@ mod reference {
         exit_codes => "exit-codes.md",
         global_flags => "global-flags.md",
         member_syntax => "member-syntax.md",
+        progress_fd => "progress-fd.md",
+        requests_on_stdin => "requests-on-stdin.md",
         refusals_and_waivers => "refusals-and-waivers.md",
         plane_add => "plane/add.md",
         plane_create => "plane/create.md",
