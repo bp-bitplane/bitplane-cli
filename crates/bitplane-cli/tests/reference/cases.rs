@@ -804,7 +804,7 @@ fn requests_on_stdin() -> Vec<Case> {
         },
         Case {
             example: "The contract version",
-            expectation: Expectation::NotBuilt("bp --version --json is ticket #45"),
+            expectation: Expectation::Matches,
             build: |_| {},
         },
     ]

@@ -75,9 +75,10 @@ to be a reason.
 Values that are volatile by design are rewritten on **both** sides before
 comparison, so a rule that would hide a difference has to hide it on the page
 too: generated plane ids, dates and times, a detached `HEAD`'s object name,
-script durations, ages, the text bitplane quotes from git, and the scratch paths
-the fixture lives at — which carry the names the documentation gives them
-(`~/planes`, `git@gitlab.com:acme/api.git`, `/Users/alfonz/projects/bitplane`).
+script durations, ages, the binary's version, the text bitplane quotes from
+git, and the scratch paths the fixture lives at — which carry the names the
+documentation gives them (`~/planes`, `git@gitlab.com:acme/api.git`,
+`/Users/alfonz/projects/bitplane`).
 
 Column **widths** are not compared, because a fixture path and a documented path
 pad their neighbours differently. Alignment is asserted byte for byte by the

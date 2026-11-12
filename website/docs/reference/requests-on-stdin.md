@@ -4,10 +4,12 @@ title: Requests on stdin
 
 # Requests on stdin
 
-:::not-implemented
+:::in-progress
 
-`bp --stdin` does not exist yet. This page is the specification it is being
-built against, not a description of the binary.
+`--stdin` and `--version --json` work as described. Still missing:
+
+- **`--progress-fd` is not accepted.**
+- The generated TypeScript linked below is not committed yet.
 
 :::
 

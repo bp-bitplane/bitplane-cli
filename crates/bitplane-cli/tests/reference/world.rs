@@ -443,6 +443,7 @@ impl World {
         let text = stamps(&text);
         let text = detached_heads(&text);
         let text = durations(&text);
+        let text = versions(&text);
         let text = ages(&text);
         git_diagnostics(&text)
     }
@@ -588,6 +589,18 @@ fn detached_heads(text: &str) -> String {
 /// How long a script took.
 fn durations(text: &str) -> String {
     replace_shaped(text, "d.ds", "<duration>")
+}
+
+/// The binary's version in `bp --version --json`, which every release bumps.
+fn versions(text: &str) -> String {
+    replace_runs(
+        text,
+        "\"version\":\"",
+        5,
+        32,
+        |character| character.is_ascii_alphanumeric() || ".-+".contains(character),
+        |_| "\"version\":\"<version>".to_owned(),
+    )
 }
 
 /// How long ago something happened.
