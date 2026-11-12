@@ -44,6 +44,8 @@ pub enum Expectation {
 pub fn of(page: &str) -> Vec<Case> {
     match page {
         "exit-codes.md" | "global-flags.md" => vec![],
+        "progress-fd.md" => progress_fd(),
+        "requests-on-stdin.md" => requests_on_stdin(),
         "member-syntax.md" => member_syntax(),
         "refusals-and-waivers.md" => refusals(),
         "plane/add.md" => plane_add(),
@@ -778,6 +780,31 @@ fn project_show() -> Vec<Case> {
         Case {
             example: "An adopted project",
             expectation: Expectation::NotBuilt(WHY),
+            build: |_| {},
+        },
+    ]
+}
+
+fn progress_fd() -> Vec<Case> {
+    vec![Case {
+        example: "(top)",
+        expectation: Expectation::Unstageable(
+            "a snapshot runs one bp and cannot open fd 3 or pipe into jq",
+        ),
+        build: |_| {},
+    }]
+}
+
+fn requests_on_stdin() -> Vec<Case> {
+    vec![
+        Case {
+            example: "(top)",
+            expectation: Expectation::Unstageable("a snapshot cannot pipe a request into stdin"),
+            build: |_| {},
+        },
+        Case {
+            example: "The contract version",
+            expectation: Expectation::NotBuilt("bp --version --json is ticket #45"),
             build: |_| {},
         },
     ]

@@ -1,6 +1,6 @@
 # ADR-0003: The Engine contract is eighteen coarse actions over a serialisable wire
 
-Status: accepted, amended by [ADR-0004](./0004-create-aborts-rename-and-destroy-converge.md), [ADR-0005](./0005-the-source-repo-is-a-bare-clone-shaped-repo.md), [ADR-0006](./0006-bitplane-owns-a-worktrees-existence-not-its-contents.md), [ADR-0008](./0008-the-plane-file-is-three-keys-and-a-path-keyed-membership-table.md) and implementation ticket 04 (`.alfonz/issues/bitplane-implementation/issues/04-cli-reference.md`)
+Status: accepted, amended by [ADR-0004](./0004-create-aborts-rename-and-destroy-converge.md), [ADR-0005](./0005-the-source-repo-is-a-bare-clone-shaped-repo.md), [ADR-0006](./0006-bitplane-owns-a-worktrees-existence-not-its-contents.md), [ADR-0008](./0008-the-plane-file-is-three-keys-and-a-path-keyed-membership-table.md), implementation ticket 04 (`.alfonz/issues/bitplane-implementation/issues/04-cli-reference.md`) and [ADR-0010](./0010-progress-is-a-third-channel.md)
 Date: 2026-09-20
 Ticket: `.alfonz/issues/bitplane-architecture/issues/06-engine-contract-action-set.md`
 Sketch: `prototypes/06-engine-contract/` (throwaway; `cargo test` passes)
@@ -117,6 +117,8 @@ Sketch: `prototypes/06-engine-contract/` (throwaway; `cargo test` passes)
 > Exact shape on `website/docs/reference/refusals-and-waivers.md`.
 
 ## Context
+
+> **Amended by ADR-0010.** The progress sink is not `Engine::set_progress`, the default trait method sketched under *The streaming hedge is cheap*. It is `LocalEngine::reporting_progress`, on the only engine there is; the trait gains a method when a second engine needs one. The rest of the hedge stands: the sink is a callback on the worker thread, and a progress event is a partial row.
 
 "Machine contract first; the human CLI renders it" has been settled since
 charting, and ADR-0001 gave it a structural form — `bitplane-core` owns the
