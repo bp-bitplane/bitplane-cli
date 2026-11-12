@@ -8,7 +8,7 @@
 //! is not a latency disaster — and a response is a single value, with streamed
 //! progress deferred.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -705,6 +705,101 @@ pub enum BranchDisposition {
     None,
 }
 
+/// What `create` reports while it works, on the fd `--progress-fd` names
+/// (ADR-0010).
+///
+/// A member event is a partial row of the result arriving early, keyed the way
+/// the row is. There is no terminal event: EOF and the exit status end the
+/// stream, so nothing here can disagree with the result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum ProgressEvent {
+    Member(MemberProgress),
+    /// Another `bp` holds a lock this run needs.
+    Waiting {
+        object: PathBuf,
+    },
+}
+
+/// One step of one member, starting or ending.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemberProgress {
+    pub member: MemberRef,
+    pub step: ProgressStep,
+    pub state: StepState,
+    /// The script's name, on `script` steps only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Where the script's output is tee'd, on `script` steps only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgressStep {
+    Fetch,
+    Worktree,
+    Script,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepState {
+    Started,
+    Done,
+    Failed,
+}
+
+/// Where progress events go. Called from worker threads.
+pub type ProgressSink<'a> = &'a (dyn Fn(&ProgressEvent) + Sync);
+
+/// The sink every caller but `create` passes.
+pub fn no_progress(_: &ProgressEvent) {}
+
+impl ProgressEvent {
+    /// A `fetch` or `worktree` step.
+    pub fn step(member: &MemberRef, step: ProgressStep, state: StepState) -> ProgressEvent {
+        ProgressEvent::Member(MemberProgress {
+            member: member.clone(),
+            step,
+            state,
+            name: None,
+            log: None,
+        })
+    }
+
+    pub fn script(member: &MemberRef, name: &str, log: &Path, state: StepState) -> ProgressEvent {
+        ProgressEvent::Member(MemberProgress {
+            member: member.clone(),
+            step: ProgressStep::Script,
+            state,
+            name: Some(name.to_owned()),
+            log: Some(log.to_path_buf()),
+        })
+    }
+
+    pub fn waiting(object: &Path) -> ProgressEvent {
+        ProgressEvent::Waiting {
+            object: object.to_path_buf(),
+        }
+    }
+
+    /// One line of the stream, without its newline.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("a progress event always serialises")
+    }
+}
+
+impl StepState {
+    pub fn of<T, E>(result: &Result<T, E>) -> StepState {
+        match result {
+            Ok(_) => StepState::Done,
+            Err(_) => StepState::Failed,
+        }
+    }
+}
+
 /// Runs one request against one engine.
 pub fn dispatch<E: Engine + ?Sized>(engine: &E, request: Request) -> Result<Response, EngineError> {
     match request {
@@ -759,6 +854,25 @@ mod tests {
         assert!(json.contains(r#""action":"plane_destroy""#), "got {json}");
         assert!(json.contains(r#""uncommitted""#), "got {json}");
         assert_eq!(serde_json::from_str::<Request>(&json).unwrap(), request);
+    }
+
+    #[test]
+    fn a_progress_event_is_one_flat_object_per_line() {
+        let api = MemberRef::parse("@api").unwrap();
+
+        assert_eq!(
+            ProgressEvent::step(&api, ProgressStep::Fetch, StepState::Started).to_json(),
+            r#"{"event":"member","member":"@api","step":"fetch","state":"started"}"#
+        );
+        assert_eq!(
+            ProgressEvent::script(&api, "install", Path::new("/l.log"), StepState::Failed)
+                .to_json(),
+            r#"{"event":"member","member":"@api","step":"script","state":"failed","name":"install","log":"/l.log"}"#
+        );
+        assert_eq!(
+            ProgressEvent::waiting(Path::new("/planes/auth-work")).to_json(),
+            r#"{"event":"waiting","object":"/planes/auth-work"}"#
+        );
     }
 
     #[test]

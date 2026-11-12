@@ -42,7 +42,10 @@ use crate::outcome::{Outcome, PerProject, SkipReason};
 use crate::project_dir::{self, ProjectDirectory};
 
 use crate::repo::Git;
-use crate::wire::{Fetched, ProjectFetchRequest, ProjectFetched};
+use crate::wire::{
+    Fetched, ProgressEvent, ProgressSink, ProgressStep, ProjectFetchRequest, ProjectFetched,
+    StepState,
+};
 
 /// How many projects are fetched at once. The cap exists because a host with
 /// thirty projects should not open thirty connections to a forge.
@@ -55,6 +58,8 @@ pub struct FetchContext<'a> {
     pub interrupt: Interrupt,
     /// Called once per contended project lock.
     pub on_lock_wait: &'a (dyn Fn(&Path) + Sync),
+    /// Where each owned project's fetch is reported. Only `create` listens.
+    pub on_progress: ProgressSink<'a>,
 }
 
 /// Fetches the projects named, or every registered project where none is.
@@ -170,6 +175,20 @@ fn fetch_one(
         return Ok(Outcome::Skipped(SkipReason::NothingToFetch));
     }
 
+    let member = MemberRef::Project(project.name().clone());
+    let report =
+        |state| (context.on_progress)(&ProgressEvent::step(&member, ProgressStep::Fetch, state));
+    report(StepState::Started);
+    let fetched = fetch_owned(project, context);
+    report(StepState::of(&fetched));
+    fetched
+}
+
+/// The fetch itself, for a project whose source repo bitplane owns.
+fn fetch_owned(
+    project: &ProjectDirectory,
+    context: &FetchContext<'_>,
+) -> Result<Outcome<Fetched>, EngineError> {
     let repo = project.source_repo();
     if !repo.is_dir() {
         return Err(EngineError::Io {

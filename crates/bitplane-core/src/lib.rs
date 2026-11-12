@@ -68,11 +68,12 @@ pub use refusal::{Reason, Refusal, Waivers};
 pub use scripts::{Script, ScriptCommand, ScriptName, ScriptPoint};
 pub use termination::Termination;
 pub use wire::{
-    BranchDisposition, BranchIntent, CONTRACT_VERSION, CreatedMember, Fetched, MemberStatus,
-    MemberView, MemberWork, PlaneAddRequest, PlaneAdded, PlaneCreateRequest, PlaneCreated,
-    PlaneDestroyRequest, PlaneDestroyed, PlaneList, PlaneListRequest, PlaneRef, PlaneRemoveRequest,
-    PlaneRemoved, PlaneScriptsRequest, PlaneShowRequest, PlaneStatus, PlaneStatusRequest,
-    PlaneView, ProjectAddRequest, ProjectAdded, ProjectFetchRequest, ProjectFetched,
-    ProjectListing, ProjectSummary, RemovedMember, Request, Response, ScriptOutcome, ScriptResult,
-    ScriptsRun, VersionInfo, dispatch,
+    BranchDisposition, BranchIntent, CONTRACT_VERSION, CreatedMember, Fetched, MemberProgress,
+    MemberStatus, MemberView, MemberWork, PlaneAddRequest, PlaneAdded, PlaneCreateRequest,
+    PlaneCreated, PlaneDestroyRequest, PlaneDestroyed, PlaneList, PlaneListRequest, PlaneRef,
+    PlaneRemoveRequest, PlaneRemoved, PlaneScriptsRequest, PlaneShowRequest, PlaneStatus,
+    PlaneStatusRequest, PlaneView, ProgressEvent, ProgressSink, ProgressStep, ProjectAddRequest,
+    ProjectAdded, ProjectFetchRequest, ProjectFetched, ProjectListing, ProjectSummary,
+    RemovedMember, Request, Response, ScriptOutcome, ScriptResult, ScriptsRun, StepState,
+    VersionInfo, dispatch, no_progress,
 };

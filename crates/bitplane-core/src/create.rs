@@ -50,8 +50,8 @@ use crate::project_fetch::{self, FetchContext};
 use crate::repo::Git;
 use crate::scripts::{self, InPlane, ScriptContext, ScriptPoint, Stop};
 use crate::wire::{
-    BranchIntent, CreatedMember, PlaneCreateRequest, PlaneCreated, ProjectFetchRequest,
-    ScriptOutcome,
+    BranchIntent, CreatedMember, PlaneCreateRequest, PlaneCreated, ProgressEvent, ProgressSink,
+    ProjectFetchRequest, ScriptOutcome,
 };
 use crate::worktrees;
 
@@ -68,6 +68,8 @@ pub struct CreateContext<'a> {
     pub on_lock_wait: &'a (dyn Fn(&Path) + Sync),
     /// Where merged script output goes as it arrives.
     pub on_script_output: &'a (dyn Fn(&[u8]) + Sync),
+    /// Where each member's steps and every lock wait are reported (ADR-0010).
+    pub on_progress: ProgressSink<'a>,
 }
 
 impl CreateContext<'_> {
@@ -86,6 +88,7 @@ impl CreateContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.on_script_output,
+            progress: self.on_progress,
         }
     }
 }
@@ -107,12 +110,18 @@ pub fn plane_create(
     let claimed = destination.claim(context.directories)?;
 
     // Held until the plane is complete. On the sentinel, never on `plane.toml`.
-    let lock = claimed.lock(context.on_lock_wait)?;
+    let lock = claimed.lock(|object| waiting(object, context))?;
 
     claimed.latch()?;
     claimed.write_plane_file(&membership(claimed.id().clone(), &planned))?;
 
-    let members = worktrees::build(&planned, claimed.path(), context.git, context.interrupt);
+    let members = worktrees::build(
+        &planned,
+        claimed.path(),
+        context.git,
+        context.interrupt,
+        context.on_progress,
+    );
     let interrupted = context.interrupt.is_raised();
 
     if interrupted || members.iter().any(PerMember::is_failure) {
@@ -225,7 +234,8 @@ fn fetch_first(projects: &[String], context: &CreateContext<'_>) -> Result<(), E
             directories: context.directories,
             git: context.git,
             interrupt: context.interrupt,
-            on_lock_wait: context.on_lock_wait,
+            on_lock_wait: &|object| waiting(object, context),
+            on_progress: context.on_progress,
         },
     )?;
 
@@ -363,6 +373,13 @@ impl Destination {
             Destination::Here(id) => ClaimedPlane::claim_here(directories, id),
         }
     }
+}
+
+/// A contended lock, said on both channels: `waiting for …` to a person, and
+/// an event to whoever reads the progress fd.
+fn waiting(object: &Path, context: &CreateContext<'_>) {
+    (context.on_lock_wait)(object);
+    (context.on_progress)(&ProgressEvent::waiting(object));
 }
 
 fn membership(id: PlaneId, planned: &[PlannedMember]) -> PlaneFile {

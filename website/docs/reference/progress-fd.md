@@ -4,10 +4,9 @@ title: Progress on an fd
 
 # Progress on an fd
 
-:::not-implemented
+:::implemented
 
-`--progress-fd` does not exist yet. This page is the specification it is being
-built against, not a description of the binary.
+Everything on this page works as described.
 
 :::
 
@@ -78,8 +77,8 @@ stream open.
 
 ## When the fd is wrong
 
-An fd that is not open, or is `0`, `1` or `2`, fails before anything is fetched
-or created. Exit `2`, `bad_progress_fd`.
+An fd that is not open, is open only for reading, or is `0`, `1` or `2`, fails
+before anything is fetched or created. Exit `2`, `bad_progress_fd`.
 
 A reader that goes away halfway costs only the progress. `bp` ignores a failed
 write, finishes the plane, and exits as it would have.
