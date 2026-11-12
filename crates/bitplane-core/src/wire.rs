@@ -22,6 +22,32 @@ use crate::plane_id::PlaneId;
 use crate::project_file::ProjectSource;
 use crate::refusal::Reason;
 
+/// The wire's version: bumped when a request, response, envelope or progress
+/// event changes in a way an existing client would misread (ADR-0010).
+pub const CONTRACT_VERSION: u32 = 1;
+
+/// What `bp --version --json` prints, so a client can check the contract
+/// before sending anything.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionInfo {
+    /// The binary's own version.
+    pub version: String,
+    pub contract: u32,
+}
+
+impl VersionInfo {
+    pub fn current(version: &str) -> VersionInfo {
+        VersionInfo {
+            version: version.to_owned(),
+            contract: CONTRACT_VERSION,
+        }
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("a version always serialises")
+    }
+}
+
 /// One user intent.
 ///
 /// Deliberately **not** `#[non_exhaustive]`: every surface is supposed to match

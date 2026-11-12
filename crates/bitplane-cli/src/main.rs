@@ -8,7 +8,7 @@ mod interrupt;
 mod render;
 
 use std::ffi::OsString;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use bitplane_core::{
@@ -16,7 +16,7 @@ use bitplane_core::{
     Interrupt, LocalEngine, PlaneAddRequest, PlaneCreateRequest, PlaneDestroyRequest,
     PlaneListRequest, PlaneRef, PlaneRemoveRequest, PlaneScriptsRequest, PlaneShowRequest,
     PlaneStatusRequest, ProjectAddRequest, ProjectFetchRequest, ProjectName, Reason, Request,
-    Response, SystemEnvironment, Termination, dispatch,
+    Response, SystemEnvironment, Termination, VersionInfo, dispatch,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use render::Rendering;
@@ -24,7 +24,7 @@ use render::Rendering;
 fn main() -> std::process::ExitCode {
     interrupt::listen_for_ctrl_c();
 
-    let invocation = run(std::env::args_os());
+    let invocation = run(std::env::args_os(), &mut std::io::stdin());
     report(&invocation, &mut std::io::stdout(), &mut std::io::stderr());
 
     invocation.termination.exit_code().into()
@@ -37,8 +37,18 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
 
+    /// Read one request as JSON from stdin instead of a command (ADR-0010).
+    #[arg(long)]
+    stdin: bool,
+
     #[command(flatten)]
     global: GlobalFlags,
+}
+
+/// Where the request comes from: a parsed command line, or stdin.
+enum Input {
+    Command(Command),
+    Request(Request),
 }
 
 /// The flags every command accepts. Documented once, on one page, and never
@@ -358,8 +368,8 @@ struct Invocation {
     termination: Termination,
 }
 
-/// Parses `args` and does what they ask.
-fn run<I, T>(args: I) -> Invocation
+/// Parses `args` and does what they ask, reading `stdin` only under `--stdin`.
+fn run<I, T>(args: I, stdin: &mut dyn Read) -> Invocation
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -373,7 +383,7 @@ where
             } else {
                 Rendering::Human
             };
-            execute(cli, rendering)
+            execute(cli, rendering, stdin)
         }
         Err(error) => render_parse_outcome(error, rendering_asked_for(&args)),
     }
@@ -395,12 +405,18 @@ fn rendering_asked_for(args: &[OsString]) -> Rendering {
     }
 }
 
-fn execute(cli: Cli, rendering: Rendering) -> Invocation {
-    let Some(command) = cli.command else {
-        return failed(no_command(), rendering);
+fn execute(cli: Cli, rendering: Rendering, stdin: &mut dyn Read) -> Invocation {
+    let input = match (cli.command, cli.stdin) {
+        (Some(command), false) => Input::Command(command),
+        (None, true) => match read_request(stdin) {
+            Ok(request) => Input::Request(request),
+            Err(envelope) => return failed(envelope, rendering),
+        },
+        (Some(_), true) => return failed(stdin_with_command(), rendering),
+        (None, false) => return failed(no_command(), rendering),
     };
 
-    match answer(command, &cli.global) {
+    match answer(input, &cli.global) {
         Ok(response) => {
             // Results and a failure are not alternatives: a fan-out whose rows
             // are the result can still report that it did not fully succeed,
@@ -420,7 +436,7 @@ fn execute(cli: Cli, rendering: Rendering) -> Invocation {
     }
 }
 
-fn answer(command: Command, global: &GlobalFlags) -> Result<Response, EngineError> {
+fn answer(input: Input, global: &GlobalFlags) -> Result<Response, EngineError> {
     let directories = Directories::resolve(
         &DirectoryOverrides {
             planes_dir: global.planes_dir.clone(),
@@ -448,7 +464,36 @@ fn answer(command: Command, global: &GlobalFlags) -> Result<Response, EngineErro
     // git is checked once, before any command touches anything (ADR-0001).
     engine.ensure_git_supported()?;
 
-    dispatch(&engine, request_for(command)?)
+    let request = match input {
+        Input::Command(command) => request_for(command)?,
+        Input::Request(request) => request,
+    };
+
+    dispatch(&engine, request)
+}
+
+/// The one request `--stdin` carries. Anything else is a usage failure, so a
+/// client bug never reaches the engine half-understood.
+fn read_request(stdin: &mut dyn Read) -> Result<Request, ErrorEnvelope> {
+    let mut text = String::new();
+    stdin
+        .read_to_string(&mut text)
+        .map_err(|err| malformed_request(&err.to_string()))?;
+
+    serde_json::from_str(&text).map_err(|err| malformed_request(&err.to_string()))
+}
+
+fn malformed_request(why: &str) -> ErrorEnvelope {
+    ErrorEnvelope::usage(
+        "malformed_request",
+        format!("stdin did not hold a request: {why}"),
+    )
+    .with_remedy("Send one request as a JSON object, tagged by `action`.")
+}
+
+fn stdin_with_command() -> ErrorEnvelope {
+    ErrorEnvelope::usage("bad_usage", "--stdin cannot be combined with a command")
+        .with_remedy("Run `bp --help` to see what bp can do.")
 }
 
 /// A response that reported an interrupt or a finding still goes to stdout —
@@ -477,6 +522,15 @@ fn render_parse_outcome(error: clap::Error, rendering: Rendering) -> Invocation 
     use clap::error::ErrorKind;
 
     match error.kind() {
+        // What a client checks before it sends a request (ADR-0010).
+        ErrorKind::DisplayVersion if rendering == Rendering::Json => Invocation {
+            stdout: format!(
+                "{}\n",
+                VersionInfo::current(env!("CARGO_PKG_VERSION")).to_json()
+            ),
+            stderr: String::new(),
+            termination: Termination::Ok,
+        },
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
             // clap's own writer: help and version go to stdout, styled or not
             // according to the terminal.
@@ -648,7 +702,7 @@ mod tests {
 
     #[test]
     fn no_arguments_is_a_usage_failure_naming_what_to_do() {
-        let envelope = envelope_of(run(["bp"]));
+        let envelope = envelope_of(run_args(["bp"]));
 
         assert_eq!(envelope.error, "no_command");
         assert_eq!(envelope.code, bitplane_core::ExitCode::Usage);
@@ -657,7 +711,7 @@ mod tests {
 
     #[test]
     fn an_unknown_flag_is_a_usage_failure_on_one_line() {
-        let envelope = envelope_of(run(["bp", "--nonsense"]));
+        let envelope = envelope_of(run_args(["bp", "--nonsense"]));
 
         assert_eq!(envelope.error, "bad_usage");
         assert_eq!(envelope.code, bitplane_core::ExitCode::Usage);
@@ -670,14 +724,14 @@ mod tests {
 
     #[test]
     fn create_with_no_member_is_a_usage_failure() {
-        let envelope = envelope_of(run(["bp", "create"]));
+        let envelope = envelope_of(run_args(["bp", "create"]));
 
         assert_eq!(envelope.code, bitplane_core::ExitCode::Usage);
     }
 
     #[test]
     fn the_two_branch_intents_cannot_both_be_asked_for() {
-        let envelope = envelope_of(run([
+        let envelope = envelope_of(run_args([
             "bp",
             "create",
             "/repos/api",
@@ -712,7 +766,7 @@ mod tests {
     fn a_failure_is_rendered_for_a_human_by_default() {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
-        report(&run(["bp"]), &mut stdout, &mut stderr);
+        report(&run_args(["bp"]), &mut stdout, &mut stderr);
 
         let written = String::from_utf8(stderr).unwrap();
         assert!(written.starts_with("error[no_command]: "), "got {written}");
@@ -723,12 +777,16 @@ mod tests {
     fn a_failure_is_one_line_of_json_under_json() {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
-        report(&run(["bp", "--json"]), &mut stdout, &mut stderr);
+        report(&run_args(["bp", "--json"]), &mut stdout, &mut stderr);
 
         let written = String::from_utf8(stderr).unwrap();
         assert_eq!(written.lines().count(), 1);
         assert!(serde_json::from_str::<serde_json::Value>(&written).is_ok());
         assert!(stdout.is_empty(), "stdout carries results only");
+    }
+
+    fn run_args<const N: usize>(args: [&str; N]) -> Invocation {
+        run(args, &mut std::io::empty())
     }
 
     fn envelope_of(invocation: Invocation) -> ErrorEnvelope {
