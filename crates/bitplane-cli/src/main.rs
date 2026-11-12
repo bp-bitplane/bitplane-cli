@@ -5,6 +5,7 @@
 //! to stderr; stdout carries results only (ADR-0003).
 
 mod interrupt;
+mod progress;
 mod render;
 
 use std::ffi::OsString;
@@ -19,6 +20,7 @@ use bitplane_core::{
     Response, SystemEnvironment, Termination, VersionInfo, dispatch,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use progress::ProgressFd;
 use render::Rendering;
 
 fn main() -> std::process::ExitCode {
@@ -51,6 +53,15 @@ enum Input {
     Request(Request),
 }
 
+impl Input {
+    fn is_create(&self) -> bool {
+        matches!(
+            self,
+            Input::Command(Command::Create(_)) | Input::Request(Request::PlaneCreate(_))
+        )
+    }
+}
+
 /// The flags every command accepts. Documented once, on one page, and never
 /// repeated per command.
 #[derive(Debug, Args)]
@@ -70,6 +81,10 @@ struct GlobalFlags {
     /// Render machine output instead of human output.
     #[arg(long, global = true)]
     json: bool,
+
+    /// Write progress events to this fd, one JSON object per line.
+    #[arg(long, global = true, value_name = "n")]
+    progress_fd: Option<i32>,
 }
 
 /// The verbs. Plane verbs are bare; project verbs are prefixed with `project`.
@@ -406,6 +421,11 @@ fn rendering_asked_for(args: &[OsString]) -> Rendering {
 }
 
 fn execute(cli: Cli, rendering: Rendering, stdin: &mut dyn Read) -> Invocation {
+    let progress = match cli.global.progress_fd.map(ProgressFd::adopt).transpose() {
+        Ok(progress) => progress,
+        Err(envelope) => return failed(envelope, rendering),
+    };
+
     let input = match (cli.command, cli.stdin) {
         (Some(command), false) => Input::Command(command),
         (None, true) => match read_request(stdin) {
@@ -416,7 +436,11 @@ fn execute(cli: Cli, rendering: Rendering, stdin: &mut dyn Read) -> Invocation {
         (None, false) => return failed(no_command(), rendering),
     };
 
-    match answer(input, &cli.global) {
+    if progress.is_some() && !input.is_create() {
+        return failed(progress_without_create(), rendering);
+    }
+
+    match answer(input, &cli.global, progress) {
         Ok(response) => {
             // Results and a failure are not alternatives: a fan-out whose rows
             // are the result can still report that it did not fully succeed,
@@ -436,7 +460,11 @@ fn execute(cli: Cli, rendering: Rendering, stdin: &mut dyn Read) -> Invocation {
     }
 }
 
-fn answer(input: Input, global: &GlobalFlags) -> Result<Response, EngineError> {
+fn answer(
+    input: Input,
+    global: &GlobalFlags,
+    progress: Option<ProgressFd>,
+) -> Result<Response, EngineError> {
     let directories = Directories::resolve(
         &DirectoryOverrides {
             planes_dir: global.planes_dir.clone(),
@@ -446,7 +474,7 @@ fn answer(input: Input, global: &GlobalFlags) -> Result<Response, EngineError> {
         &SystemEnvironment,
     )?;
 
-    let engine = LocalEngine::new(directories)
+    let mut engine = LocalEngine::new(directories)
         .with_interrupt(Interrupt::process())
         .announcing_lock_waits(|object| {
             // Progress, not a result, so it goes to stderr in both modes.
@@ -460,6 +488,10 @@ fn answer(input: Input, global: &GlobalFlags) -> Result<Response, EngineError> {
             let _ = stderr.write_all(bytes);
             let _ = stderr.flush();
         });
+
+    if let Some(progress) = progress {
+        engine = engine.reporting_progress(move |event| progress.report(event));
+    }
 
     // git is checked once, before any command touches anything (ADR-0001).
     engine.ensure_git_supported()?;
@@ -489,6 +521,14 @@ fn malformed_request(why: &str) -> ErrorEnvelope {
         format!("stdin did not hold a request: {why}"),
     )
     .with_remedy("Send one request as a JSON object, tagged by `action`.")
+}
+
+fn progress_without_create() -> ErrorEnvelope {
+    ErrorEnvelope::usage(
+        "bad_usage",
+        "--progress-fd only works with create, the one command that reports progress",
+    )
+    .with_remedy("Drop --progress-fd, or use it with `bp create`.")
 }
 
 fn stdin_with_command() -> ErrorEnvelope {

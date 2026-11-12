@@ -76,7 +76,8 @@ An event is a partial row keyed by `MemberRef`, or a lock wait:
 `failed`. Script events carry the script's `name` and its `log`, so a watcher
 can tail the file the result will name. `create` is the only emitter today; the
 flag is global because under `--stdin` the command line does not say which
-action is coming.
+action is coming. Any other action with the flag is `bad_usage`, so a caller
+never mistakes silence for nothing to report.
 
 The sink is not where ADR-0003 predicted it. ADR-0003 sketched
 `Engine::set_progress`, a default method on the trait; the sink is

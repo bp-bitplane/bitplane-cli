@@ -6,10 +6,8 @@ title: Requests on stdin
 
 :::in-progress
 
-`--stdin` and `--version --json` work as described. Still missing:
-
-- **`--progress-fd` is not accepted.**
-- The generated TypeScript linked below is not committed yet.
+`--stdin`, `--version --json` and `--progress-fd` work as described. The
+generated TypeScript linked below is not committed yet.
 
 :::
 
