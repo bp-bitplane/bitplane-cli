@@ -4,10 +4,9 @@ title: Requests on stdin
 
 # Requests on stdin
 
-:::in-progress
+:::implemented
 
-`--stdin`, `--version --json` and `--progress-fd` work as described. The
-generated TypeScript linked below is not committed yet.
+Everything on this page works as described.
 
 :::
 

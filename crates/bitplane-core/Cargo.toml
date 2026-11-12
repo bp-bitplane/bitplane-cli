@@ -16,3 +16,12 @@ publish = false
 serde.workspace = true
 serde_json.workspace = true
 toml_edit.workspace = true
+# Same pins as bitplane-cc, so the TypeScript both emit agrees (ADR-0010).
+specta = { version = "=2.0.0-rc.25", features = ["derive"], optional = true }
+specta-serde = { version = "=0.0.12", optional = true }
+specta-typescript = { version = "=0.0.12", optional = true }
+
+[features]
+# Derives `specta::Type` on the wire types and checks `bp-contract.ts` against
+# them. Off by default: a plain build compiles none of it.
+typescript = ["dep:specta", "dep:specta-serde", "dep:specta-typescript"]
