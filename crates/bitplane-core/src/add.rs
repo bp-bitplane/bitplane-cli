@@ -43,6 +43,7 @@ use crate::project_fetch::{self, FetchContext};
 use crate::read;
 use crate::repo::Git;
 use crate::scripts::{self, InPlane, ScriptContext, ScriptPoint, Stop};
+use crate::wire::no_progress;
 use crate::wire::{CreatedMember, PlaneAddRequest, PlaneAdded, ProjectFetchRequest};
 use crate::worktrees;
 
@@ -92,7 +93,13 @@ pub fn plane_add(
 
     plane_file_with(&plane, &entries(&planned))?;
 
-    let members = worktrees::build(&planned, plane.path(), context.git, context.interrupt);
+    let members = worktrees::build(
+        &planned,
+        plane.path(),
+        context.git,
+        context.interrupt,
+        &no_progress,
+    );
     let interrupted = context.interrupt.is_raised();
 
     if interrupted || members.iter().any(PerMember::is_failure) {
@@ -238,6 +245,7 @@ fn fetch_first(projects: &[String], context: &AddContext<'_>) -> Result<(), Engi
             git: context.git,
             interrupt: context.interrupt,
             on_lock_wait: context.on_lock_wait,
+            on_progress: &no_progress,
         },
     )?;
 
@@ -357,6 +365,7 @@ impl AddContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.on_script_output,
+            progress: &no_progress,
         }
     }
 }

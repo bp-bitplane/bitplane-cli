@@ -29,6 +29,7 @@ use crate::member::{MemberRef, WorktreePath};
 use crate::plane_id::PlaneId;
 
 /// How hard a read looks.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -44,6 +45,7 @@ pub enum HealthCheck {
 }
 
 /// What a read found about one plane.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneHealth {
     /// The tier this was computed at, so a caller can tell "nothing found" from
@@ -55,6 +57,7 @@ pub struct PlaneHealth {
 }
 
 /// One thing a read found wrong.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "finding", rename_all = "snake_case")]
 #[non_exhaustive]

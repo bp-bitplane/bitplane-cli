@@ -18,7 +18,9 @@ on the individual command pages; they link back to it.
 | `--config <path>` | a file | The config file to read instead of the default. |
 | `--json` | — | Render machine output instead of human output — the response on stdout, a failure on stderr. See [`--json`](#--json) below. |
 | `-h`, `--help` | — | Print help for the command and exit `0`. |
-| `-V`, `--version` | — | Print `bp <version>` and exit `0`. |
+| `--progress-fd <n>` | an open fd | Write [progress events](./progress-fd.md) to fd `n` as JSON lines. Only `bp create` reports any. |
+| `--stdin` | — | Read one [request](./requests-on-stdin.md) as JSON from stdin instead of a command. |
+| `-V`, `--version` | — | Print `bp <version>` and exit `0`. With `--json`, print `{"version": …, "contract": …}` instead. |
 
 `--help` and `--version` go to **stdout** and exit `0`. They are not errors, even
 though they stop the command.

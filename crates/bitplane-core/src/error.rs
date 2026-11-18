@@ -19,11 +19,13 @@ use crate::refusal::{Refusal, waive_flags};
 use crate::wire::{CreatedMember, PlaneRef, RemovedMember, ScriptOutcome};
 
 /// What every bitplane failure looks like on the wire.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ErrorEnvelope {
     /// A stable machine tag — matched on by scripts, never rendered to a user.
     pub error: String,
     /// The code the process exits with.
+    #[cfg_attr(feature = "typescript", specta(type = u8))]
     pub code: ExitCode,
     /// One human sentence saying what went wrong.
     pub message: String,
@@ -35,6 +37,7 @@ pub struct ErrorEnvelope {
 }
 
 /// One of the things that was wrong.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Problem {
     /// What the problem is about — a member, a plane id, a path — rendered for
@@ -48,6 +51,7 @@ pub struct Problem {
 ///
 /// Serialisable in both directions, because a fan-out row carries one of these
 /// as data rather than as an envelope (ADR-0003).
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "error", rename_all = "snake_case")]
 #[non_exhaustive]
@@ -170,9 +174,11 @@ pub enum EngineError {
     /// result and are reported alongside this, because a fan-out row is data
     /// rather than an error once the fan-out has begun.
     FetchFailed {
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         failed: usize,
         /// The projects there was something to fetch **for**. An adopted
         /// project is a row, never a denominator.
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         fetchable: usize,
         problems: Vec<Problem>,
     },
@@ -258,9 +264,11 @@ pub enum EngineError {
         plane: String,
         operation: Teardown,
         /// How many members raised at least one surviving reason.
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         blocking: usize,
         /// How many members were under consideration — the plane's, for
         /// `destroy`; the ones named, for `rm`.
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         considered: usize,
         refusals: Vec<Refusal>,
     },
@@ -316,6 +324,7 @@ pub enum EngineError {
 ///
 /// Three different things, so the remedy names what is actually there rather
 /// than saying "already in use" and leaving the user to look.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -335,6 +344,7 @@ pub enum Occupant {
 /// They carry identical rules — removing a member destroys exactly as much work
 /// as destroying a one-member plane (ADR-0006) — so they share every failure and
 /// differ only in the sentence they print.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -346,6 +356,7 @@ pub enum Teardown {
 }
 
 /// Which way a branch intent was not met.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]

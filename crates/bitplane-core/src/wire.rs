@@ -8,7 +8,7 @@
 //! is not a latency disaster — and a response is a single value, with streamed
 //! progress deferred.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,11 +22,39 @@ use crate::plane_id::PlaneId;
 use crate::project_file::ProjectSource;
 use crate::refusal::Reason;
 
+/// The wire's version: bumped when a request, response, envelope or progress
+/// event changes in a way an existing client would misread (ADR-0010).
+pub const CONTRACT_VERSION: u32 = 1;
+
+/// What `bp --version --json` prints, so a client can check the contract
+/// before sending anything.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionInfo {
+    /// The binary's own version.
+    pub version: String,
+    pub contract: u32,
+}
+
+impl VersionInfo {
+    pub fn current(version: &str) -> VersionInfo {
+        VersionInfo {
+            version: version.to_owned(),
+            contract: CONTRACT_VERSION,
+        }
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("a version always serialises")
+    }
+}
+
 /// One user intent.
 ///
 /// Deliberately **not** `#[non_exhaustive]`: every surface is supposed to match
 /// it exhaustively, so that an action added here and forgotten at a rendering
 /// fails to compile — the same property [`dispatch`] has.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Request {
@@ -56,6 +84,7 @@ pub enum Request {
 
 /// One answer. Never a scalar count: a fan-out answers with a vector of keyed
 /// per-item outcomes, so a progress stream is later that vector arriving early.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Response {
@@ -108,6 +137,7 @@ impl Response {
 /// `~/projects/weird:name` from `~/projects/bitplane:feat-x` needs the
 /// filesystem, and the engine is the side that has one — the same reason
 /// ADR-0003 puts plane discovery there.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneCreateRequest {
     /// One or more members, as written: `@name`, or a path, each optionally
@@ -140,6 +170,7 @@ pub struct PlaneCreateRequest {
 /// `add` cannot abort-and-remove the way `create` does — the plane holds other
 /// members full of work — so a failure force-removes only the worktrees **it**
 /// created and drops only **its own** entries.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneAddRequest {
     pub plane: PlaneRef,
@@ -162,6 +193,7 @@ pub struct PlaneAddRequest {
 ///
 /// An intent flag rather than a lookup round trip: the ambiguity costs one
 /// field instead of a "does this branch exist?" call (ADR-0003).
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -176,6 +208,7 @@ pub enum BranchIntent {
 }
 
 /// A plane that was made.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneCreated {
     pub id: PlaneId,
@@ -207,6 +240,7 @@ pub struct PlaneCreated {
 /// marker, under any failure. The latch means *this plane was never completed,
 /// nothing in it is yours*, and a plane full of real work flagged as free to
 /// discard would be a trapdoor.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneAdded {
     /// The **directory's name**, which is the plane's identity — a string for
@@ -226,6 +260,7 @@ pub struct PlaneAdded {
 }
 
 /// One member's worktree.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreatedMember {
     /// The branch the worktree is on.
@@ -245,6 +280,7 @@ pub struct CreatedMember {
 /// `plane.toml`: without it every in-plane command would be resolve-then-act,
 /// two round trips, which is the precise failure mode coarse granularity exists
 /// to prevent (ADR-0003). The walk therefore runs in the engine.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "plane", rename_all = "snake_case")]
 pub enum PlaneRef {
@@ -256,12 +292,14 @@ pub enum PlaneRef {
 }
 
 /// Every plane on this host.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneListRequest {
     pub health: HealthCheck,
 }
 
 /// One plane, in detail.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneShowRequest {
     pub plane: PlaneRef,
@@ -269,18 +307,21 @@ pub struct PlaneShowRequest {
 }
 
 /// What git says about every member of one plane.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneStatusRequest {
     pub plane: PlaneRef,
 }
 
 /// The planes, in directory-name order.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneList {
     pub planes: Vec<PlaneView>,
 }
 
 /// One plane, as a read describes it.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneView {
     /// The **directory's name**, which is the plane's identity — held as a
@@ -299,6 +340,7 @@ pub struct PlaneView {
 }
 
 /// One member, and the branch its worktree is on right now.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemberView {
     pub member: MemberRef,
@@ -310,6 +352,7 @@ pub struct MemberView {
 
 /// git's own answer about every member of one plane, rendered and stored
 /// nowhere — which is what makes it unable to go stale (ADR-0006).
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneStatus {
     pub id: String,
@@ -320,6 +363,7 @@ pub struct PlaneStatus {
 }
 
 /// One member's row.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemberStatus {
     pub member: MemberRef,
@@ -333,6 +377,7 @@ pub struct MemberStatus {
 /// Deliberately **not** `#[non_exhaustive]`, for the same reason [`Response`] is
 /// not: every surface renders it, so a state added here and forgotten at a
 /// rendering has to fail to compile.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "work", rename_all = "snake_case")]
 pub enum MemberWork {
@@ -340,13 +385,16 @@ pub enum MemberWork {
     /// and its `HEAD` are the user's, and this is reported at exit `0`.
     Reported {
         /// Tracked files with changes, staged or not.
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         modified: usize,
         /// Files git does not know about.
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         untracked: usize,
         /// Commits on this branch contained in no `refs/remotes/origin/*`.
         /// Never `git branch -d`'s upstream comparison, which reports a branch
         /// already safe on the forge as unmerged (ADR-0006). No fetch is
         /// performed, so a stale tracking ref can only make this too large.
+        #[cfg_attr(feature = "typescript", specta(type = u32))]
         ahead: usize,
     },
     /// There is nothing at the member's path to ask about.
@@ -362,6 +410,7 @@ pub enum MemberWork {
 /// One request per intent, not one per command line: a default name colliding
 /// and being re-run with `--name <suggestion>` is **two** requests, because the
 /// caller supplied new information in between (ADR-0003).
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectAddRequest {
     /// Anything git can fetch from. bitplane speaks the git protocol and no
@@ -373,6 +422,7 @@ pub struct ProjectAddRequest {
 }
 
 /// Bring owned projects up to date.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectFetchRequest {
     /// Which projects, as `@name` or `name`. **Empty takes every registered
@@ -381,6 +431,7 @@ pub struct ProjectFetchRequest {
 }
 
 /// A project that was registered.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectAdded {
     pub name: ProjectName,
@@ -395,12 +446,14 @@ pub struct ProjectAdded {
 }
 
 /// Every project on this host, one row each.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectListing {
     pub projects: Vec<PerProject<ProjectSummary>>,
 }
 
 /// One project, as a listing sees it.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectSummary {
     pub source: ProjectSource,
@@ -410,6 +463,7 @@ pub struct ProjectSummary {
 }
 
 /// What a fetch did, project by project.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectFetched {
     pub projects: Vec<PerProject<Fetched>>,
@@ -418,10 +472,12 @@ pub struct ProjectFetched {
 }
 
 /// One project's fetch.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fetched {
     /// How many `refs/remotes/origin/*` this fetch added, moved or pruned.
     /// Zero is "up to date".
+    #[cfg_attr(feature = "typescript", specta(type = u32))]
     pub updated: usize,
 }
 
@@ -483,6 +539,7 @@ impl ProjectFetched {
 }
 
 /// Take a whole plane apart.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneDestroyRequest {
     pub plane: PlaneRef,
@@ -499,6 +556,7 @@ pub struct PlaneDestroyRequest {
 }
 
 /// Take named members out of a plane.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneRemoveRequest {
     pub plane: PlaneRef,
@@ -518,6 +576,7 @@ pub struct PlaneRemoveRequest {
 /// On [`Engine`] and not [`Reader`]: it runs arbitrary user commands and writes
 /// logs, and *"a read never writes"* is supposed to be checkable by reading the
 /// trait (ADR-0003).
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneScriptsRequest {
     pub plane: PlaneRef,
@@ -530,6 +589,7 @@ pub struct PlaneScriptsRequest {
 }
 
 /// What a script run did, script by script.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScriptsRun {
     pub id: String,
@@ -543,6 +603,7 @@ pub struct ScriptsRun {
 /// `finished_at` is **not optional**, so a script killed mid-run leaves no
 /// record at all: "started but never finished" is unrepresentable, and Ctrl-C
 /// is the escape (ADR-0004).
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScriptOutcome {
     /// The script's own name, which every script has by construction.
@@ -555,6 +616,7 @@ pub struct ScriptOutcome {
     pub log: PathBuf,
     /// RFC 3339, in UTC.
     pub finished_at: String,
+    #[cfg_attr(feature = "typescript", specta(type = u32))]
     pub duration_ms: u64,
     /// Flattened, so a row is one flat object on the wire — the same shape
     /// [`PerMember`] gives an outcome.
@@ -566,6 +628,7 @@ pub struct ScriptOutcome {
 ///
 /// Deliberately **not** `#[non_exhaustive]`, for the same reason [`MemberWork`]
 /// is not: every surface renders it.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum ScriptResult {
@@ -605,6 +668,7 @@ impl ScriptOutcome {
 }
 
 /// A plane that was taken apart.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneDestroyed {
     /// The **directory's name**, which is the plane's identity — a string for
@@ -627,6 +691,7 @@ pub struct PlaneDestroyed {
 }
 
 /// Members that were taken out of a plane.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneRemoved {
     pub id: String,
@@ -639,6 +704,7 @@ pub struct PlaneRemoved {
 }
 
 /// One member's worktree, gone.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemovedMember {
     /// The branch the worktree was on, absent where it was detached or where
@@ -662,6 +728,7 @@ pub struct RemovedMember {
 /// Deliberately **not** `#[non_exhaustive]`, for the same reason [`MemberWork`]
 /// is not: every surface renders it, so a state added here and forgotten at a
 /// rendering has to fail to compile.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BranchDisposition {
@@ -677,6 +744,105 @@ pub enum BranchDisposition {
     /// There was no branch to speak of: the worktree was detached, or git
     /// could not be asked.
     None,
+}
+
+/// What `create` reports while it works, on the fd `--progress-fd` names
+/// (ADR-0010).
+///
+/// A member event is a partial row of the result arriving early, keyed the way
+/// the row is. There is no terminal event: EOF and the exit status end the
+/// stream, so nothing here can disagree with the result.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum ProgressEvent {
+    Member(MemberProgress),
+    /// Another `bp` holds a lock this run needs.
+    Waiting {
+        object: PathBuf,
+    },
+}
+
+/// One step of one member, starting or ending.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemberProgress {
+    pub member: MemberRef,
+    pub step: ProgressStep,
+    pub state: StepState,
+    /// The script's name, on `script` steps only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Where the script's output is tee'd, on `script` steps only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log: Option<PathBuf>,
+}
+
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgressStep {
+    Fetch,
+    Worktree,
+    Script,
+}
+
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepState {
+    Started,
+    Done,
+    Failed,
+}
+
+/// Where progress events go. Called from worker threads.
+pub type ProgressSink<'a> = &'a (dyn Fn(&ProgressEvent) + Sync);
+
+/// The sink every caller but `create` passes.
+pub fn no_progress(_: &ProgressEvent) {}
+
+impl ProgressEvent {
+    /// A `fetch` or `worktree` step.
+    pub fn step(member: &MemberRef, step: ProgressStep, state: StepState) -> ProgressEvent {
+        ProgressEvent::Member(MemberProgress {
+            member: member.clone(),
+            step,
+            state,
+            name: None,
+            log: None,
+        })
+    }
+
+    pub fn script(member: &MemberRef, name: &str, log: &Path, state: StepState) -> ProgressEvent {
+        ProgressEvent::Member(MemberProgress {
+            member: member.clone(),
+            step: ProgressStep::Script,
+            state,
+            name: Some(name.to_owned()),
+            log: Some(log.to_path_buf()),
+        })
+    }
+
+    pub fn waiting(object: &Path) -> ProgressEvent {
+        ProgressEvent::Waiting {
+            object: object.to_path_buf(),
+        }
+    }
+
+    /// One line of the stream, without its newline.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("a progress event always serialises")
+    }
+}
+
+impl StepState {
+    pub fn of<T, E>(result: &Result<T, E>) -> StepState {
+        match result {
+            Ok(_) => StepState::Done,
+            Err(_) => StepState::Failed,
+        }
+    }
 }
 
 /// Runs one request against one engine.
@@ -733,6 +899,25 @@ mod tests {
         assert!(json.contains(r#""action":"plane_destroy""#), "got {json}");
         assert!(json.contains(r#""uncommitted""#), "got {json}");
         assert_eq!(serde_json::from_str::<Request>(&json).unwrap(), request);
+    }
+
+    #[test]
+    fn a_progress_event_is_one_flat_object_per_line() {
+        let api = MemberRef::parse("@api").unwrap();
+
+        assert_eq!(
+            ProgressEvent::step(&api, ProgressStep::Fetch, StepState::Started).to_json(),
+            r#"{"event":"member","member":"@api","step":"fetch","state":"started"}"#
+        );
+        assert_eq!(
+            ProgressEvent::script(&api, "install", Path::new("/l.log"), StepState::Failed)
+                .to_json(),
+            r#"{"event":"member","member":"@api","step":"script","state":"failed","name":"install","log":"/l.log"}"#
+        );
+        assert_eq!(
+            ProgressEvent::waiting(Path::new("/planes/auth-work")).to_json(),
+            r#"{"event":"waiting","object":"/planes/auth-work"}"#
+        );
     }
 
     #[test]

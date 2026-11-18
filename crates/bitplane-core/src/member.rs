@@ -49,8 +49,10 @@ pub const MAX_PROJECT_NAME_LENGTH: usize = 128;
 pub const RESERVED_NAME_SEGMENTS: [&str; 2] = [REPO_DIR_NAME, BIN_DIR_NAME];
 
 /// What a member is a worktree of.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
+#[cfg_attr(feature = "typescript", specta(type = String))]
 pub enum MemberRef {
     /// A registered project, written `@codestyle`.
     Project(ProjectName),
@@ -61,8 +63,10 @@ pub enum MemberRef {
 /// A project's host-unique name: a `/`-separated **path of segments**, each on
 /// the charset ADR-0007 settled. Never carries the sigil — the parser strips it
 /// once, at the read boundary, and it is a bare name everywhere after.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
+#[cfg_attr(feature = "typescript", specta(type = String))]
 pub struct ProjectName(String);
 
 /// Where a member's worktree lives, relative to the plane directory root.
@@ -70,8 +74,10 @@ pub struct ProjectName(String);
 /// Derived from the member's source **once, at create time**, and never
 /// recomputed — so an existing plane keeps the layout it was built with when
 /// the derivation rules change.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
+#[cfg_attr(feature = "typescript", specta(type = String))]
 pub struct WorktreePath(PathBuf);
 
 impl MemberRef {

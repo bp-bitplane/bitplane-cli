@@ -10,6 +10,8 @@
 //! Windows, and that deferral binds exactly this one constraint.
 
 pub mod add;
+#[cfg(feature = "typescript")]
+pub mod contract;
 pub mod create;
 pub mod destroy;
 pub mod directories;
@@ -68,11 +70,12 @@ pub use refusal::{Reason, Refusal, Waivers};
 pub use scripts::{Script, ScriptCommand, ScriptName, ScriptPoint};
 pub use termination::Termination;
 pub use wire::{
-    BranchDisposition, BranchIntent, CreatedMember, Fetched, MemberStatus, MemberView, MemberWork,
-    PlaneAddRequest, PlaneAdded, PlaneCreateRequest, PlaneCreated, PlaneDestroyRequest,
-    PlaneDestroyed, PlaneList, PlaneListRequest, PlaneRef, PlaneRemoveRequest, PlaneRemoved,
-    PlaneScriptsRequest, PlaneShowRequest, PlaneStatus, PlaneStatusRequest, PlaneView,
-    ProjectAddRequest, ProjectAdded, ProjectFetchRequest, ProjectFetched, ProjectListing,
-    ProjectSummary, RemovedMember, Request, Response, ScriptOutcome, ScriptResult, ScriptsRun,
-    dispatch,
+    BranchDisposition, BranchIntent, CONTRACT_VERSION, CreatedMember, Fetched, MemberProgress,
+    MemberStatus, MemberView, MemberWork, PlaneAddRequest, PlaneAdded, PlaneCreateRequest,
+    PlaneCreated, PlaneDestroyRequest, PlaneDestroyed, PlaneList, PlaneListRequest, PlaneRef,
+    PlaneRemoveRequest, PlaneRemoved, PlaneScriptsRequest, PlaneShowRequest, PlaneStatus,
+    PlaneStatusRequest, PlaneView, ProgressEvent, ProgressSink, ProgressStep, ProjectAddRequest,
+    ProjectAdded, ProjectFetchRequest, ProjectFetched, ProjectListing, ProjectSummary,
+    RemovedMember, Request, Response, ScriptOutcome, ScriptResult, ScriptsRun, StepState,
+    VersionInfo, dispatch, no_progress,
 };
