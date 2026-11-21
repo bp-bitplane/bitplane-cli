@@ -57,7 +57,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - run: cargo test --workspace -- --skip reference::
+      - run: "cargo test --workspace -- --skip reference::"
 
   reference:
     name: test (the reference runs itself)
