@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live as markdown files under `.alfonz/issues/<feature>/` (gitignored) in this repo. See `docs/agents/issue-tracker.md`.
+GitHub issues across the `bp-bitplane` repos, collected on org Project #1; cross-cutting work goes in `bitplane-protocol`. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
