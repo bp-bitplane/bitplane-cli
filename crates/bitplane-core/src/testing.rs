@@ -81,6 +81,12 @@ pub fn git(repository: &Path, args: &[&str]) -> String {
         .arg("-C")
         .arg(repository)
         .args(args)
+        // Worktrees and clones bp makes don't carry the fixture's
+        // `user.*`; without this, commits there need a global identity.
+        .env("GIT_AUTHOR_NAME", "bitplane tests")
+        .env("GIT_AUTHOR_EMAIL", "tests@bitplane.invalid")
+        .env("GIT_COMMITTER_NAME", "bitplane tests")
+        .env("GIT_COMMITTER_EMAIL", "tests@bitplane.invalid")
         .output()
         .unwrap_or_else(|err| panic!("run git {args:?}: {err}"));
 
