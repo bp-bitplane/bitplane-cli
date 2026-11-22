@@ -62,7 +62,7 @@ use crate::repo::{Git, Insistence, WorkingTree, WorktreeLock, canonical_path};
 use crate::scripts::{self, InPlane, ScriptContext, ScriptPoint, Stop};
 use crate::wire::{
     BranchDisposition, PlaneDestroyRequest, PlaneDestroyed, PlaneRemoveRequest, PlaneRemoved,
-    RemovedMember, ScriptOutcome,
+    RemovedMember, ScriptOutcome, no_progress,
 };
 
 /// Everything the teardown verbs need that is not in the request.
@@ -84,6 +84,7 @@ impl TeardownContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.on_script_output,
+            progress: &no_progress,
         }
     }
 }

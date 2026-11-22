@@ -21,7 +21,7 @@ use crate::interrupt::Interrupt;
 use crate::outcome::{Outcome, PerMember, SkipReason};
 use crate::plan::{Base, PlannedMember};
 use crate::repo::{Git, Insistence, canonical_path as canonical};
-use crate::wire::CreatedMember;
+use crate::wire::{CreatedMember, ProgressEvent, ProgressSink, StepState};
 
 /// How many worktrees are built at once.
 ///
@@ -41,6 +41,7 @@ pub fn build(
     plane_directory: &Path,
     git: &Git,
     interrupt: Interrupt,
+    progress: ProgressSink<'_>,
 ) -> Vec<PerMember<CreatedMember>> {
     let next = AtomicUsize::new(0);
     let stop = AtomicBool::new(false);
@@ -61,7 +62,12 @@ pub fn build(
                     } else if stop.load(Ordering::SeqCst) {
                         Outcome::Skipped(SkipReason::AbortedAfterEarlierFailure)
                     } else {
-                        match add_worktree(member, plane_directory, git) {
+                        let report =
+                            |state| progress(&ProgressEvent::worktree(&member.reference, state));
+                        report(StepState::Started);
+                        let added = add_worktree(member, plane_directory, git);
+                        report(StepState::of(&added));
+                        match added {
                             Ok(created) => Outcome::Ok(created),
                             Err(error) => {
                                 stop.store(true, Ordering::SeqCst);

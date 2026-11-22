@@ -294,6 +294,8 @@ exists. Re-running identically will never help.
 | --- | --- | --- |
 | `no_command` | `no command given` | `Run` `bp --help` `to see what bp can do.` |
 | `bad_usage` | clap's first line, trimmed | `Run` `bp --help` `to see what bp can do.` |
+| `bad_progress_fd` | `fd 9 is not open` | `Open the fd for writing before running bp, e.g.` `3>progress.jsonl`. |
+| `malformed_request` | `stdin did not hold a request: <what serde said>` | `Send one request as a JSON object, tagged by` `action`. |
 | `plane_id_in_use` | `auth-work is already a plane` | `Choose another id, or destroy the existing plane first.` |
 | `plane_id_in_use` | `auth-work exists but was never completed` | `Nothing in it is yours; run` `bp destroy -p auth-work` `to clear it.` |
 | `plane_id_in_use` | `auth-work is a claimed directory with no plane file` | `Run` `bp doctor` `to see what is in it, then remove the directory by hand.` |

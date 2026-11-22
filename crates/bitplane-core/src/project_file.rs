@@ -74,6 +74,7 @@ pub struct ProjectFile {
 
 /// Where a project's repo comes from — and, because the two are in 1:1
 /// correspondence, which kind of project it is.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProjectSource {

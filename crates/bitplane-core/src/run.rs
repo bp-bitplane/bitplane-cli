@@ -28,7 +28,7 @@ use crate::interrupt::Interrupt;
 use crate::plane_dir::OpenPlane;
 use crate::read;
 use crate::scripts::{self, InPlane, ScriptContext, ScriptName};
-use crate::wire::{PlaneScriptsRequest, ScriptsRun};
+use crate::wire::{PlaneScriptsRequest, ScriptsRun, no_progress};
 
 /// Everything `plane_scripts` needs that is not in the request.
 pub struct RunContext<'a> {
@@ -124,6 +124,7 @@ impl RunContext<'_> {
             directories: self.directories,
             interrupt: self.interrupt,
             output: self.output,
+            progress: &no_progress,
         }
     }
 }

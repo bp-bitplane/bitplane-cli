@@ -50,7 +50,7 @@ use crate::plane_file::Member;
 use crate::plane_id::is_well_formed_id;
 use crate::project_dir::{self, BIN_DIR_NAME, ProjectDirectory};
 use crate::time::Rfc3339;
-use crate::wire::{ScriptOutcome, ScriptResult};
+use crate::wire::{ProgressEvent, ProgressSink, ScriptOutcome, ScriptResult, StepState};
 
 /// Where a plane keeps its script logs, under its reserved directory.
 pub const LOGS_DIR: &str = "logs";
@@ -60,8 +60,10 @@ const SHELL: &str = "/bin/sh";
 
 /// A script's name: the same character set as a plane id, so a user-chosen name
 /// is never trusted into a path.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
+#[cfg_attr(feature = "typescript", specta(type = String))]
 pub struct ScriptName(String);
 
 /// One of the two moments bitplane fires scripts at.
@@ -70,6 +72,7 @@ pub struct ScriptName(String);
 /// per-project: `post_worktree_create` fires per member on both `create` and
 /// `add`, and `pre_worktree_remove` on both `destroy` and `rm`. Both are the
 /// identical situation seen twice.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -87,6 +90,7 @@ pub enum ScriptPoint {
 /// just makes everyone write `["sh", "-c", …]`. A bare string shorthand is
 /// rejected deliberately: a list of strings reads like argv and would mean
 /// shell.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptCommand {
@@ -95,6 +99,7 @@ pub enum ScriptCommand {
 }
 
 /// One `[scripts.<name>]` table, as the file holds it.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Script {
     pub name: ScriptName,
@@ -122,6 +127,8 @@ pub struct ScriptContext<'a> {
     /// [`crate::LocalEngine`]'s lock announcement is one: the engine does not
     /// own a terminal, and a surface that wants the bytes says so.
     pub output: &'a (dyn Fn(&[u8]) + Sync),
+    /// Where each script's start and end are reported (ADR-0010).
+    pub progress: ProgressSink<'a>,
 }
 
 /// Whether a pass stops at the first script that fails.
@@ -329,6 +336,13 @@ fn run_one(
         .open(&log)
         .map_err(|err| EngineError::io(&log, err))?;
     let started = Instant::now();
+    let member = MemberRef::Project(site.project.clone());
+    (context.progress)(&ProgressEvent::script(
+        &member,
+        &script.name,
+        &log,
+        StepState::Started,
+    ));
 
     let result = match spawn(site, script, &mut file, context) {
         Ok(result) => result,
@@ -342,6 +356,12 @@ fn run_one(
             }
         }
     };
+
+    let state = match result {
+        ScriptResult::Ok => StepState::Done,
+        ScriptResult::Failed { .. } => StepState::Failed,
+    };
+    (context.progress)(&ProgressEvent::script(&member, &script.name, &log, state));
 
     Ok(ScriptOutcome {
         name: script.name.to_string(),

@@ -17,6 +17,7 @@ use crate::error::EngineError;
 use crate::member::{MemberRef, ProjectName};
 
 /// One member's row.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerMember<T> {
     pub member: MemberRef,
@@ -34,6 +35,7 @@ pub struct PerMember<T> {
 /// rather than made generic, because the key's *name* is part of the wire
 /// format — a reader of a row should not have to know which fan-out it came
 /// from to read its subject.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerProject<T> {
     pub project: ProjectName,
@@ -46,6 +48,7 @@ pub struct PerProject<T> {
 /// Adjacently tagged, so the tag is readable without knowing `T` and every
 /// arm's payload — a struct, a bare reason, a typed failure — serialises the
 /// same way.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", content = "detail", rename_all = "snake_case")]
 pub enum Outcome<T> {
@@ -62,6 +65,7 @@ pub enum Outcome<T> {
 }
 
 /// Why a member was not attempted.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]

@@ -232,6 +232,17 @@ The distinction is load-bearing because conflating the two is what let "always J
 
 _Avoid_: "the JSON error", "the error JSON" — both name a rendering as though it were the contract.
 
+**request**
+One user intent as data: the `Request` an action is, tagged by `action`. Every command line becomes one before it runs, and `bp --stdin` takes one as JSON instead of argv. The **response** is what it returns. See ADR-0003 and ADR-0010.
+
+_Avoid_: "command" for the wire value — a command is what a user types, and several command lines can become the same request.
+
+**contract version**
+The number a client checks: the wire's version, bumped only when a request, response, error envelope or progress event changes in a way an existing client would misread. `bp --version --json` reports it beside the binary's version, which says which `bp` and nothing about compatibility. See ADR-0010.
+
+**progress event**
+A JSON line `bp create` writes to the caller's `--progress-fd` while it works: a **member event**, which is a partial row of the result keyed by the member, or a **waiting event** for a lock another `bp` holds. Advisory: there is no final event, and the outcome is the exit code and the result on stdout. See ADR-0010.
+
 **reap**
 Destroying a plane judged to be garbage.
 

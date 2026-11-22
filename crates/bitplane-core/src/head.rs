@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 const ABBREVIATED_COMMIT: usize = 7;
 
 /// What a worktree's `HEAD` names.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "head", rename_all = "snake_case")]
 pub enum Head {
